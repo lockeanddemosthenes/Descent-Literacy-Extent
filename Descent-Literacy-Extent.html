@@ -98,7 +98,7 @@ var LZString={_keyStr:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234
 		<div id="init-lacking">Your browser lacks required capabilities. Please upgrade it or switch to another to continue.</div>
 		<div id="init-loading"><div>Loading&hellip;</div></div>
 	</div>
-	<tw-storydata name="Descent Literacy Extent" startnode="125" creator="Twine" creator-version="2.3.14" ifid="FC18C11A-7225-4554-863E-C0DB27D729A9" zoom="1" format="SugarCube" format-version="2.34.1" options="" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">/**
+	<tw-storydata name="Descent Literacy Extent" startnode="242" creator="Twine" creator-version="2.3.14" ifid="FC18C11A-7225-4554-863E-C0DB27D729A9" zoom="1" format="SugarCube" format-version="2.34.1" options="" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">/**
 FONT STUFF BEGINS
 **/
 .shadow {
@@ -225,6 +225,11 @@ hr {
   background-color: #000;
 }
 
+/* Used to align label for volume slider */
+input[type=range] {
+	vertical-align: middle;
+}
+
 /**
 Passage formatting and changes per character.
 **/
@@ -241,7 +246,7 @@ Passage formatting and changes per character.
 }
 
 /**
-Body formatting and changes per character.
+Body and UI bar formatting and changes per character.
 **/
 
 .zane .passage, .zane #ui-bar {
@@ -260,9 +265,6 @@ Body formatting and changes per character.
   background-color: #ffe8f1;
 }
 
-/**
-UI bar formatting and changes per charaacter.
-**/
 #ui-bar {
   background-color: #e6e6e6;
   color: #000000;
@@ -299,7 +301,133 @@ config.saves.isAllowed = function() {
 // message-macro.min.js, for SugarCube 2, by Chapel
 // v1.0.1, 2021-04-20, 53d1a20e9321b3782a303cf7dbe00f5c51e947db
 ;setup.messageMacro={},setup.messageMacro.default="Help",Macro.add("message",{tags:null,handler:function(){var e=this.payload[0].contents,a=$(document.createElement("span")),s=$(document.createElement(this.args.includes("btn")?"button":"a")),t=$(document.createElement("span"));s.wiki(this.args.length>0&&"btn"!==this.args[0]?this.args[0]:setup.messageMacro.default).ariaClick(this.createShadowWrapper((function(){a.hasClass("open")?t.css("display","none").empty():t.css("display","block").wiki(e),a.toggleClass("open")}))),a.attr("id","macro-"+this.name+"-"+this.args.join("").replace(/[^A-Za-z0-9]/g,"")).addClass("message-text").append(s).append(t).appendTo(this.output)}});
-// end message-macro.min.js</script><tw-tag name="22" color="blue"></tw-tag>,<tw-tag name="lucy" color="red"></tw-tag>,<tw-tag name="renli" color="purple"></tw-tag>,<tw-tag name="rika" color="green"></tw-tag>,<tw-tag name="tt" color="orange"></tw-tag>,<tw-tag name="zane" color="yellow"></tw-tag><tw-passagedata pid="1" name="The Beginning of the End" tags="zane prologue" position="746,296" size="200,200">&lt;&lt;audio dunks_zane play loop&gt;&gt;You are in your least favorite part of town, as evidenced by the way you wrinkle your nose and scuff the sole of your sneaker along the tiled floor. At least the nutty aroma of coffee lingers in the stagnant air, giving the shop the slightest semblance of class and allowing you to forgive its sins to sit with your companions for a moment.
+// end message-macro.min.js
+
+/**
+* oh jeez god
+*/
+// Volume Slider, by Chapel; for SugarCube 2
+// version 1.2.0 (modified by HiEv)
+// For custom CSS for slider use: http://danielstern.ca/range.css/#/
+
+/*
+	Changelog:
+	v1.2.0:
+		- Fixed using/storing the current volume level in the settings.
+	v1.1.0:
+		- Fixed compatibility issues with SugarCube version 2.28 (still
+		  compatible with older versions, too).
+		- Added settings API integration for SugarCube 2.26.
+		- Internal improvements and greater style consistency with my
+		  other work.
+		- Added a pre-minified version.
+		- By default, the slider is now more granular than before
+		  (101 possible positions vs 11). Change the 'current' and
+		  'rangeMax' options to 10 to restore the old feel.
+*/
+
+(function () {
+	// Set initial values.
+	var options = {
+		current  : 50,  // Default volume level.
+		rangeMax : 100,
+		step	 : 1,
+		setting  : true
+	};
+	Setting.load();
+	if (options.setting && settings.volume) {
+		options.current = parseInt(settings.volume);
+	}
+	var vol = {
+		last: options.current,
+		start: (options.current / options.rangeMax).toFixed(2)
+	};
+
+	// Function to update the volume level.
+	function setVolume (val) {
+		if (typeof val !== 'number') val = Number(val);
+		if (Number.isNaN(val) || val < 0) val = 0;
+		if (val > 1) val = 1;
+		options.current = Math.round(val * options.rangeMax);
+		if (options.setting) {
+			settings.volume = options.current;
+			Setting.save();
+		}
+		if ($('input[name=volume]').val() != options.current) {
+			$('input[name=volume]').val(options.current);
+		}
+		try {
+			if (SimpleAudio) {
+				if (typeof SimpleAudio.volume === 'function') {
+					SimpleAudio.volume(val);
+				} else {
+					SimpleAudio.volume = val;
+				}
+				return val;
+			} else {
+				throw new Error('Cannot access audio API.');
+			}
+		} catch (err) {
+			// Fall back to the wikifier if we have to.
+			console.error(err.message, err);
+			$.wiki('<<masteraudio volume ' + val + '>>');
+			return val;
+		}
+	}
+
+	// Fix the initial volume level display.
+	postdisplay['volume-task'] = function (taskName) {
+		delete postdisplay[taskName];
+		setVolume(vol.start);
+	};
+
+	// Grab volume level changes from the volume slider.
+	$(document).on('input', 'input[name=volume]', function() {
+		var change = parseInt($('input[name=volume]').val());
+		setVolume(change / options.rangeMax);
+		vol.last = change;
+	});
+
+	// Create the <<volume>> macro.
+	Macro.add('volume', {
+		handler : function () {
+			var wrapper = $(document.createElement('span'));
+			var slider = $(document.createElement('input'));
+			var className = 'macro-' + this.name;
+			slider.attr({
+				id		: 'volume-control',
+				type	: 'range',
+				name	: 'volume',
+				min		: '0',
+				max		: options.rangeMax,
+				step	: options.step,
+				value	: options.current
+			});
+			// Class '.macro-volume' and ID '#volume-control' for styling the slider
+			wrapper.append(slider).addClass(className).appendTo(this.output);
+		}
+	});
+
+	// Add Setting API integration for SugarCube 2.26 and higher.
+	function updateVolume () {
+		setVolume(settings.volume / options.rangeMax);
+	}
+	if (options.setting) {
+		if (Setting && Setting.addRange && typeof Setting.addRange === 'function') {
+			Setting.addRange('volume', {
+				label : 'Volume: ',
+				min : 0,
+				max : options.rangeMax,
+				step : options.step,
+				default : options.current,
+				onInit : updateVolume,
+				onChange : updateVolume
+			});
+		} else {
+			console.error('This version of SugarCube does not include the `Settings.addRange()` method; please try updating to the latest version of SugarCube.');
+		}
+	}
+}());</script><tw-tag name="22" color="blue"></tw-tag>,<tw-tag name="lucy" color="red"></tw-tag>,<tw-tag name="renli" color="purple"></tw-tag>,<tw-tag name="rika" color="green"></tw-tag>,<tw-tag name="tt" color="orange"></tw-tag>,<tw-tag name="zane" color="yellow"></tw-tag><tw-passagedata pid="1" name="The Beginning of the End" tags="zane prologue" position="746,296" size="200,200">&lt;&lt;audio dunks_zane play loop&gt;&gt;You are in your least favorite part of town, as evidenced by the way you wrinkle your nose and scuff the sole of your sneaker along the tiled floor. At least the nutty aroma of coffee lingers in the stagnant air, giving the shop the slightest semblance of class and allowing you to forgive its sins to sit with your companions for a moment.
 
 After all, class is the only appropriate way to honor your very existence. As the eldest child of the current head of the di Leggieri family, you have been primed to mingle with the wealthy and powerful from day one. You charm everyone with just a smile and send them swooning with your words.
 
@@ -792,7 +920,6 @@ Time to [[head back to the French Quarter]], then.</tw-passagedata><tw-passageda
 &lt;&lt;cacheaudio &quot;ilia&quot; &quot;music/Faceoff.mp3&quot;&gt;&gt;
 &lt;&lt;cacheaudio &quot;kickshock&quot; &quot;music/Kick Shock.mp3&quot;&gt;&gt;
 &lt;&lt;cacheaudio &quot;beautyflow&quot; &quot;music/Beauty Flow.mp3&quot;&gt;&gt;
-&lt;&lt;cacheaudio &quot;jerryfive&quot; &quot;music/Jerry Five.mp3&quot;&gt;&gt;
 
 &lt;&lt;cacheaudio &quot;flashback1&quot; &quot;music/I Am a Rock.mp3&quot;&gt;&gt;
 &lt;&lt;cacheaudio &quot;memory&quot; &quot;music/Memory 1.mp3&quot;&gt;&gt;
@@ -802,7 +929,10 @@ Time to [[head back to the French Quarter]], then.</tw-passagedata><tw-passageda
 &lt;&lt;cacheaudio &quot;santeria&quot; &quot;music/Santeria.mp3&quot;&gt;&gt;
 &lt;&lt;cacheaudio &quot;oceanman&quot; &quot;music/Ocean Man.mp3&quot;&gt;&gt;
 &lt;&lt;cacheaudio &quot;yield&quot; &quot;music/Yield.mp3&quot;&gt;&gt;
-&lt;&lt;cacheaudio &quot;vslancastrians&quot; &quot;music/Yu-Gi-Oh! Duelist of the Roses OST - Vs Lancastrians Extended.mp3&quot;&gt;&gt;</tw-passagedata><tw-passagedata pid="57" name="head back to the French Quarter" tags="zane prologue" position="738,7468" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio frenchquarter play loop&gt;&gt;Ah, gratin dauphinois... Even with the doors closed, you can smell it from outside the corner store/French restaurant. Though you try to control it, you are moving far more positive energy than usual, and your companions are entirely aware of just how lighthearted you are. Even those who pass by and don&#39;t recognize your disinterested face a quick smile and wave.
+&lt;&lt;cacheaudio &quot;vslancastrians&quot; &quot;music/Yu-Gi-Oh! Duelist of the Roses OST - Vs Lancastrians Extended.mp3&quot;&gt;&gt;
+
+&lt;&lt;cacheaudio &quot;itemgetsfx&quot; &quot;music/Pokémon Black &amp; White (Obtained an Item!).mp3&quot;&gt;&gt;
+&lt;&lt;cacheaudio &quot;oceansfx&quot; &quot;music/water_ocean_waves_shore_constant_small_001.mp3&quot;&gt;&gt;</tw-passagedata><tw-passagedata pid="57" name="head back to the French Quarter" tags="zane prologue" position="738,7468" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio frenchquarter play loop&gt;&gt;Ah, gratin dauphinois... Even with the doors closed, you can smell it from outside the corner store/French restaurant. Though you try to control it, you are moving far more positive energy than usual, and your companions are entirely aware of just how lighthearted you are. Even those who pass by and don&#39;t recognize your disinterested face a quick smile and wave.
 
 To be honest, you just want Elanore to hurry along and show up. Between Rika and Elanore, it will be a duel between an immovable object and an unstoppable force. But you allow yourself to hope that, of all people, [[Elanore can change Rika&#39;s mind.]]</tw-passagedata><tw-passagedata pid="58" name="Elanore can change Rika&#39;s mind." tags="zane prologue" position="777,7703" size="100,100">When she arrives, you are nothing short of shocked at the difference in appearance. She has exchanged grape scrubs for a baby blue A-line summer dress - you never thought you&#39;d see the day tulle and rhinestones looked good together, but here you are. Her dark jacket bears a matching blue trim and lapel pin. Wavy locks, partly plaited back, fall just beyond her shoulders.
 
@@ -880,7 +1010,7 @@ Empty bloodshot turn to you. Even if you wanted to run, it’s too late now.
 |&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Please don&#39;t take the sword.|
 |&lt;img src=&quot;sprites/renli/sweat.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Right, yes, don&#39;t take the sword. We&#39;re here to... investigate.|
 
-Renli continues her trash-organizing from earlier. You realize Mason does not have a trash can of any sort in this room. You feel a wave of [[nausea.]]</tw-passagedata><tw-passagedata pid="70" name="Time to fight, pretty boy." tags="zane prologue" position="791,10260" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio scallywag play loop&gt;&gt;|&lt;img src=&quot;sprites/zane/smug.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; You look like you haven&#39;t blinked in a month. Let&#39;s fix that, shall we?|
+Renli continues her trash-organizing from earlier. You realize Mason does not have a trash can of any sort in this room. You feel a wave of [[nausea.]]</tw-passagedata><tw-passagedata pid="70" name="Time to fight, pretty boy." tags="zane prologue" position="791,10260" size="100,100">|&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio scallywag play loop&gt;&gt;&lt;img src=&quot;sprites/zane/smug.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; You look like you haven&#39;t blinked in a month. Let&#39;s fix that, shall we?|
 
 You start pulling in all the &lt;i&gt;good&lt;/i&gt; of your surroundings, charging up a blast. Your toes come up off the ground, shoes hovering an inch above the sand as your whole being starts to glow.
 
@@ -1250,6 +1380,7 @@ Still, it&#39;ll be exciting to finally meet [[DJ December]]!</tw-passagedata><t
 &quot;Memory 1&quot; - Super Paper Mario OST
 &quot;Bryyo (Ice)&quot; - Metroid Prime 3: Corruption OST
 &quot;Turn to Stone&quot; - Electric Light Orchestra
+&quot;Obtained an Item!&quot; - Pokémon Black &amp; White OST
 
 we good:
 &quot;Aerosol of my Love&quot; Kevin MacLeod (incompetech.com)
@@ -1284,13 +1415,11 @@ http://creativecommons.org/licenses/by/4.0/
 Licensed under Creative Commons: By Attribution 4.0 License
 http://creativecommons.org/licenses/by/4.0/
 
-&quot;Jerry Five&quot; Kevin MacLeod (incompetech.com)
-Licensed under Creative Commons: By Attribution 4.0 License
-http://creativecommons.org/licenses/by/4.0/
-
 &quot;Kick Shock&quot; Kevin MacLeod (incompetech.com)
 Licensed under Creative Commons: By Attribution 4.0 License
 http://creativecommons.org/licenses/by/4.0/
+
+&quot;Constant small ocean waves break onto shore 1&quot; from ZapSlat.com
 
 &quot;Poppers and Prosecco&quot; Kevin MacLeod (incompetech.com)
 Licensed under Creative Commons: By Attribution 4.0 License
@@ -1302,29 +1431,31 @@ http://creativecommons.org/licenses/by/4.0/
 
 &quot;Wretched Destroyer&quot; Kevin MacLeod (incompetech.com)
 Licensed under Creative Commons: By Attribution 4.0 License
-http://creativecommons.org/licenses/by/4.0/</tw-passagedata><tw-passagedata pid="121" name="Part One" tags="partone player" position="1362,190" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;center&gt;&lt;p style=&quot;font-size:30px&quot;&gt;[[Part One: Priam Saw It First|And so it goes.]]&lt;/p&gt;&lt;/center&gt;</tw-passagedata><tw-passagedata pid="122" name="StoryCaption" tags="" position="511,451" size="100,100">Playing as: &lt;&lt;if tags().includes(&quot;player&quot;)&gt;&gt;&lt;&lt;print $playerName&gt;&gt;&lt;&lt;/if&gt;&gt;&lt;&lt;if tags().includes(&quot;zane&quot;)&gt;&gt;Zane&lt;&lt;/if&gt;&gt;&lt;&lt;if tags().includes(&quot;renli&quot;)&gt;&gt;Renli&lt;&lt;/if&gt;&gt;&lt;&lt;if tags().includes(&quot;tt&quot;)&gt;&gt;Twenty-Two&lt;&lt;/if&gt;&gt;&lt;&lt;if tags().includes(&quot;lucy&quot;)&gt;&gt;Lucy&lt;&lt;/if&gt;&gt;</tw-passagedata><tw-passagedata pid="123" name="StoryMenu" tags="" position="308,205" size="100,100">[[Home|homepage]]
+http://creativecommons.org/licenses/by/4.0/</tw-passagedata><tw-passagedata pid="121" name="Part One" tags="partone player" position="1362,190" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;center&gt;&lt;p style=&quot;font-size:30px&quot;&gt;[[Part One: Priam Saw It First|And so it goes.]]&lt;/p&gt;&lt;/center&gt;</tw-passagedata><tw-passagedata pid="122" name="StoryCaption" tags="" position="511,450" size="100,100">Playing as: &lt;&lt;if tags().includes(&quot;player&quot;)&gt;&gt;&lt;&lt;print $playerName&gt;&gt;&lt;&lt;elseif tags().includes(&quot;zane&quot;)&gt;&gt;Zane&lt;&lt;elseif tags().includes(&quot;renli&quot;)&gt;&gt;Renli&lt;&lt;elseif tags().includes(&quot;tt&quot;)&gt;&gt;Twenty-Two&lt;&lt;elseif tags().includes(&quot;lucy&quot;)&gt;&gt;Lucy&lt;&lt;elseif tags().includes(&quot;rika&quot;)&gt;&gt;Rika&lt;&lt;elseif tags().includes(&quot;elanore&quot;)&gt;&gt;Elanore&lt;&lt;/if&gt;&gt;
+
+Volume: &lt;&lt;volume&gt;&gt;</tw-passagedata><tw-passagedata pid="123" name="StoryMenu" tags="" position="308,205" size="100,100">[[Home|homepage]]
 [[Characters]]
 [[Music Credits]]</tw-passagedata><tw-passagedata pid="124" name="Characters" tags="no-saves" position="307,324" size="100,100">&lt;h1&gt;Characters&lt;/h1&gt;
 &lt;passage style=&quot;font-size:20px&quot;&gt;&lt;b&gt;Protagonists&lt;/b&gt;&lt;/passage&gt;
 &lt;b&gt;Zane Ansovino Ivo Hikaru di Leggieri.&lt;/b&gt; A bit of an egomaniac, which is only made more infuriating by the fact that he is so perfect. He really woke up like this. Stay blessed, plebs.
-&lt;&lt;message &quot;&lt;small&gt;stats&lt;/small&gt;&quot; &quot;zanestats&quot;&gt;&gt;Stamina: ★
+&lt;&lt;message &quot;&lt;small&gt;stats&lt;/small&gt;&quot; &quot;zanestats&quot;&gt;&gt;Stamina: ★☆☆☆☆
 Proficiency: ★★★★★
-Creativity: ★★★★&lt;&lt;/message&gt;&gt;
+Creativity: ★★★★☆&lt;&lt;/message&gt;&gt;
 
 &lt;b&gt;Lucy Lane.&lt;/b&gt; Now just a doggone minute, wasn&#39;t that husky a poodle a moment ago? Doesn&#39;t matter - who&#39;s a good girl, who&#39;s a good girl? Oh, yeah, and the good girl&#39;s owner is fun and cool, too.
-&lt;&lt;message &quot;&lt;small&gt;stats&lt;/small&gt;&quot; &quot;lucystats&quot;&gt;&gt;Stamina: ★★★
+&lt;&lt;message &quot;&lt;small&gt;stats&lt;/small&gt;&quot; &quot;lucystats&quot;&gt;&gt;Stamina: ★★★☆☆
 Proficiency: ★★★★★
-Creativity: ★★★&lt;&lt;/message&gt;&gt;
+Creativity: ★★★☆☆&lt;&lt;/message&gt;&gt;
 
 &lt;b&gt;Twenty-Two.&lt;/b&gt; Often mistaken for a tourist due to her fish-out-of-water mannerisms and general naïveté. Still, her exuberance and eagerness to dole out kindness makes it hard for anyone to really give her a reality check.
 &lt;&lt;message &quot;&lt;small&gt;stats&lt;/small&gt;&quot; &quot;22stats&quot;&gt;&gt;Stamina: ★★★★★
-Proficiency: ★★★
-Creativity: ★★&lt;&lt;/message&gt;&gt;
+Proficiency: ★★★☆☆
+Creativity: ★★☆☆☆&lt;&lt;/message&gt;&gt;
 
 &lt;b&gt;Renli.&lt;/b&gt; Something of an outcast, but more out of keeping to herself than out of being disliked. Seems mysterious to most, but her friends know she just has a rather one-track mind.
-&lt;&lt;message &quot;&lt;small&gt;stats&lt;/small&gt;&quot; &quot;renlistats&quot;&gt;&gt;Stamina: ★★★★
-Proficiency: ★★★★
-Creativity: ★★&lt;&lt;/message&gt;&gt;
+&lt;&lt;message &quot;&lt;small&gt;stats&lt;/small&gt;&quot; &quot;renlistats&quot;&gt;&gt;Stamina: ★★★★☆
+Proficiency: ★★★★☆
+Creativity: ★★☆&lt;&lt;/message&gt;&gt;
 
 &lt;hr&gt;
 
@@ -1760,7 +1891,7 @@ You hurry down the stairs and back through the hallways of the radio tower. Than
 
 Several buildings around you, seemingly at random, are on fire. Screams ring out - at first you think they&#39;re out of fear, but quickly you realize they are war cries.
 
-Rika was right. There is [[a bigger fire|Part Two]] to put out.</tw-passagedata><tw-passagedata pid="192" name="Part Two" tags="player parttwo" position="2140,194" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;center&gt;&lt;p style=&quot;font-size:30px&quot;&gt;[[Part Two: Accompanied by Rain|rika flashback]]&lt;/p&gt;&lt;/center&gt;</tw-passagedata><tw-passagedata pid="193" name="part two starts fr" tags="parttwo tt" position="2266,778" size="200,200">&lt;&lt;audio norm play loop&gt;&gt;Literacy is burning, and with it your hope. You, Zane, Lucy, Renli, Rika, and John stand outside the radio tower, watching everything and nothing at the same time.
+Rika was right. There is [[a bigger fire|Part Two]] to put out.</tw-passagedata><tw-passagedata pid="192" name="Part Two" tags="player parttwo" position="2140,194" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;center&gt;&lt;p style=&quot;font-size:30px&quot;&gt;[[Part Two: Accompanied by Rain|rika flashback]]&lt;/p&gt;&lt;/center&gt;</tw-passagedata><tw-passagedata pid="193" name="part two starts fr" tags="parttwo tt" position="2266,733" size="200,200">&lt;&lt;audio norm play loop&gt;&gt;Literacy is burning, and with it your hope. You, Zane, Lucy, Renli, Rika, and John stand outside the radio tower, watching everything and nothing at the same time.
 
 You can see two familiar figures quickly approaching your company, and you understand that now is your time to clear things up.
 
@@ -1769,7 +1900,7 @@ You can see two familiar figures quickly approaching your company, and you under
 
 She clams up when she sees what you&#39;re looking at. Their federal uniforms, despite being universally recognized, are a rare sight indeed.
 
-For [[most]], anyway.</tw-passagedata><tw-passagedata pid="194" name="most" tags="tt parttwo" position="2322,1020" size="100,100">|&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Twos!|
+For [[most]], anyway.</tw-passagedata><tw-passagedata pid="194" name="most" tags="tt parttwo" position="2322,975" size="100,100">|&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Twos!|
 |&lt;img src=&quot;sprites/22/excite.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; Norm!|
 
 You throw your arms around him and squeal.
@@ -1787,19 +1918,19 @@ You notice the way the general is staring stonily at Renli, who smiles and waves
 
 You put on your wateriest eyes and furrow your brows upward.
 
-|&lt;img src=&quot;sprites/22/shy.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Can I pleaaase tell them [[everything?]]|</tw-passagedata><tw-passagedata pid="195" name="everything?" tags="tt parttwo" position="2323,1161" size="100,100">Norm and the general exchange looks. They seem to hold an intense discussion before the general nods silently.
+|&lt;img src=&quot;sprites/22/shy.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Can I pleaaase tell them [[everything?]]|</tw-passagedata><tw-passagedata pid="195" name="everything?" tags="tt parttwo" position="2323,1116" size="100,100">Norm and the general exchange looks. They seem to hold an intense discussion before the general nods silently.
 
 |&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; You can tell them what&#39;s important.|
 
 You turn to your friends and smile broadly.
 
-|&lt;img src=&quot;sprites/22/neutral.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; [[I&#39;m actually a fish!]]|</tw-passagedata><tw-passagedata pid="196" name="I&#39;m actually a fish!" tags="tt parttwo" position="2323,1311" size="100,100">|&lt;img src=&quot;sprites/lucy/shock.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; What.|
+|&lt;img src=&quot;sprites/22/neutral.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; [[I&#39;m actually a fish!]]|</tw-passagedata><tw-passagedata pid="196" name="I&#39;m actually a fish!" tags="tt parttwo" position="2323,1266" size="100,100">|&lt;img src=&quot;sprites/lucy/shock.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; What.|
 |&lt;img src=&quot;sprites/zane/sweat.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; What.|
 |&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Oh, that explains the tail!|
 |&lt;img src=&quot;sprites/22/neutral.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; Yeah! My true form is really really big, and there&#39;s a lot of orange and white. Also, &quot;Twenty-two&quot; is short for Case 22.|
 |&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; We discovered she had an epithet, and after a lot of experimentation, we figured it wouldn&#39;t hurt to try to integrate her into society. Oh, by the way, my epithet is Normal.|
 
-He gives your tail a big slap, and suddenly you&#39;re all back to [[normal.]]</tw-passagedata><tw-passagedata pid="197" name="normal." tags="tt parttwo" position="2324,1462" size="100,100">|&lt;img src=&quot;sprites/zane/sweat.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; If it weren&#39;t for the fact that Lucy and Renli are here right now, I would never believe any of that just happened.|
+He gives your tail a big slap, and suddenly you&#39;re all back to [[normal.]]</tw-passagedata><tw-passagedata pid="197" name="normal." tags="tt parttwo" position="2324,1417" size="100,100">|&lt;img src=&quot;sprites/zane/sweat.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; If it weren&#39;t for the fact that Lucy and Renli are here right now, I would never believe any of that just happened.|
 |&lt;img src=&quot;sprites/22/shy.png&quot; width=150px&gt;|&lt;b&gt;TWENY-TWO:&lt;/b&gt; Sorry I kept it from you for so long. I&#39;m usually not very good with secrets, but this one was really important.|
 |&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; It&#39;s alright. Thanks for telling us, Twos.|
 |&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Well, now that that&#39;s done with, we should head to the sheriff&#39;s office. You&#39;ll be safer there.|
@@ -1810,14 +1941,14 @@ He gives your tail a big slap, and suddenly you&#39;re all back to [[normal.]]</
 
 The group starts gathering together, until the general holds up his hand.
 
-|&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; Wait. [[She]] can&#39;t come with us.|</tw-passagedata><tw-passagedata pid="198" name="She" tags="tt parttwo" position="2324,1612" size="100,100">He points right at Lucy. Lulu growls at him.
+|&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; Wait. [[She]] can&#39;t come with us.|</tw-passagedata><tw-passagedata pid="198" name="She" tags="tt parttwo" position="2324,1567" size="100,100">He points right at Lucy. Lulu growls at him.
 
 |&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Well...|
 |&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; She&#39;s dangerous.|
 |&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; I meaaan...|
 |&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; &lt;i&gt;You&lt;/i&gt; know what &lt;i&gt;I&lt;/i&gt; mean.|
 
-There&#39;s an uncomfortable pause as everyone looks at one another. You notice that Lucy doesn&#39;t protest, just cluthces Lulu tighter to [[herself.]]</tw-passagedata><tw-passagedata pid="199" name="herself." tags="tt parttwo" position="2324,1762" size="100,100">Zane steps toward Lucy and crosses his arms, forming a gap between himself and the agents.
+There&#39;s an uncomfortable pause as everyone looks at one another. You notice that Lucy doesn&#39;t protest, just cluthces Lulu tighter to [[herself.]]</tw-passagedata><tw-passagedata pid="199" name="herself." tags="tt parttwo" position="2324,1717" size="100,100">Zane steps toward Lucy and crosses his arms, forming a gap between himself and the agents.
 
 |&lt;img src=&quot;sprites/zane/smug.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; You could at least make up a believable excuse. Lucy can be a pain in the neck, but she isn&#39;t &lt;i&gt;dangerous.&lt;/i&gt;|
 
@@ -1827,7 +1958,7 @@ Renli joins him, followed shortly by the ever-floating John.
 
 You give Norm an apologetic look and move to stand beside your friends.
 
-|&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; This puts us at an [[impasse.]]|</tw-passagedata><tw-passagedata pid="200" name="impasse." tags="tt parttwo" position="2324,1912" size="100,100">Or it would, if a distant boom didn&#39;t suddenly draw your attention.
+|&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; This puts us at an [[impasse.]]|</tw-passagedata><tw-passagedata pid="200" name="impasse." tags="tt parttwo" position="2324,1867" size="100,100">Or it would, if a distant boom didn&#39;t suddenly draw your attention.
 
 |&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; Is that the toy store?|
 |&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Sure is!|
@@ -1838,7 +1969,7 @@ You give Norm an apologetic look and move to stand beside your friends.
 He wrinkles his face and curls his lip in disgust, but ultimately shrugs.
 
 |&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; Norm, you watch the others. Do not let them out of your sight.|
-|&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; [[Yessir!]]|</tw-passagedata><tw-passagedata pid="201" name="Yessir!" tags="tt parttwo" position="2324,2062" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio dailylife play loop&gt;&gt;As soon as the general is gone, you yawn and stretch.
+|&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; [[Yessir!]]|</tw-passagedata><tw-passagedata pid="201" name="Yessir!" tags="tt parttwo" position="2324,2017" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio dailylife play loop&gt;&gt;As soon as the general is gone, you yawn and stretch.
 
 |&lt;img src=&quot;sprites/22/neutral.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; I&#39;m hungry. Let&#39;s go to Rika&#39;s.|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Wh- my home?|
@@ -1846,7 +1977,7 @@ He wrinkles his face and curls his lip in disgust, but ultimately shrugs.
 |&lt;img src=&quot;sprites/lucy/doubt.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Are we even allowed to leave?|
 |&lt;img src=&quot;sprites/22/neutral.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; The general only said Norm had to keep an eye on us, so... yes!|
 |&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Yeah, that&#39;s true!|
-|&lt;img src=&quot;sprites/22/excite.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; So what&#39;re we waiting for? [[Let&#39;s go!]]|</tw-passagedata><tw-passagedata pid="202" name="Let&#39;s go!" tags="tt parttwo" position="2324,2212" size="100,100">You cross back over the bridge, chattering excitedly beside Lucy. She still seems pretty gloomy, but she asks you lots of questions about your life as a fish. You hope the conversation cheers her up.
+|&lt;img src=&quot;sprites/22/excite.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; So what&#39;re we waiting for? [[Let&#39;s go!]]|</tw-passagedata><tw-passagedata pid="202" name="Let&#39;s go!" tags="tt parttwo" position="2324,2167" size="100,100">You cross back over the bridge, chattering excitedly beside Lucy. She still seems pretty gloomy, but she asks you lots of questions about your life as a fish. You hope the conversation cheers her up.
 
 |&lt;img src=&quot;sprites/22/neutral.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; I don&#39;t remember too much of my life before the agency took me in, but then I traveled to a lot of places and met a lot of different creatures!|
 |&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Have you ever met an ocean sunfish?|
@@ -1854,14 +1985,14 @@ He wrinkles his face and curls his lip in disgust, but ultimately shrugs.
 
 [maybe more lol]
 
-[[baguet]]</tw-passagedata><tw-passagedata pid="203" name="baguet" tags="tt parttwo" position="2276,2353" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio frenchquarter play loop&gt;&gt;You grab a baguette as soon as you enter the store and immediately chomp down on it. Norm does the same. Lucy, however, whirls on Rika. She&#39;s nowhere near as angry as she was before, but it&#39;s still very clear she&#39;s unhappy.
+[[baguet]]</tw-passagedata><tw-passagedata pid="203" name="baguet" tags="tt parttwo" position="2276,2308" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio frenchquarter play loop&gt;&gt;You grab a baguette as soon as you enter the store and immediately chomp down on it. Norm does the same. Lucy, however, whirls on Rika. She&#39;s nowhere near as angry as she was before, but it&#39;s still very clear she&#39;s unhappy.
 
 |&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Now will you tell us the truth?|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; If you think you and Twenty-two are ready to hear it.|
 
 Lucy glances at you, and you nod.
 
-|&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; [[So?]]|</tw-passagedata><tw-passagedata pid="204" name="So?" tags="tt parttwo" position="2327,2606" size="100,100">|&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Literacy is just a fancy prison. All of you are convicts. You, 22, Renli, Zane, practically everyone in town.|
+|&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; [[So?]]|</tw-passagedata><tw-passagedata pid="204" name="So?" tags="tt parttwo" position="2327,2561" size="100,100">|&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Literacy is just a fancy prison. All of you are convicts. You, 22, Renli, Zane, practically everyone in town.|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; I&#39;m one of the few wardens, and Norm here has special permission to stick around.|
 
 You blink and nibble thoughtfully on your bread. Lucy lowers her head and rubs her temples for a moment before she responds.
@@ -1869,14 +2000,14 @@ You blink and nibble thoughtfully on your bread. Lucy lowers her head and rubs h
 |&lt;img src=&quot;sprites/lucy/angy.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; ... ugh. That&#39;s what I thought.|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; I won&#39;t lie; you guys have done really bad things - at least, on paper. But they also wouldn&#39;t send you to the [[George Arthur Correctional Facility]] if they didn&#39;t have hard evidence.|
 
-Wait - that name -</tw-passagedata><tw-passagedata pid="205" name="George Arthur Correctional Facility" tags="tt parttwo" position="2327,2754" size="100,100">|&lt;img src=&quot;sprites/22/um.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; Camelot?|
+Wait - that name -</tw-passagedata><tw-passagedata pid="205" name="George Arthur Correctional Facility" tags="tt parttwo" position="2327,2709" size="100,100">|&lt;img src=&quot;sprites/22/um.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; Camelot?|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; That&#39;s right.|
 |&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; So... if we&#39;re so terrible, why aren&#39;t you running for your life? I just beat you up, after all.|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Because we need your help. There are worse things in Camelot than you, Lucy Lane. After all, you fought for what you believed in, didn&#39;t you?|
 
 Lucy narrows her eyes and takes a deep breath.
 
-|&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; [[I...]]|</tw-passagedata><tw-passagedata pid="206" name="I..." tags="zane parttwo" position="2288,2901" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio faceoff play loop&gt;&gt;Several civilians are scattered around the floor of the toy store. Some lay unconscious or dead, while others cower and clutch their heads. You blanket Renli and General Douglas in blessings as you wander through, trying to evacuate as many people as possible without hurting yourselves.
+|&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; [[I...]]|</tw-passagedata><tw-passagedata pid="206" name="I..." tags="zane parttwo" position="2288,2856" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio faceoff play loop&gt;&gt;Several civilians are scattered around the floor of the toy store. Some lay unconscious or dead, while others cower and clutch their heads. You blanket Renli and General Douglas in blessings as you wander through, trying to evacuate as many people as possible without hurting yourselves.
 
 Renli tried to heal them, too, at first. But Douglas grabbed her by the shoulders when she pulled a bunch of grapes out of the air and yelled at her, so you took the fruit instead.
 
@@ -1923,14 +2054,14 @@ You feel it, that sudden burst of vitality, and then you see what it does to Lul
 
 Lucy, you remember what they called it. What they called you.
 
-[[Diamond Dog.|Diamond Dog. ntev]]</tw-passagedata><tw-passagedata pid="213" name="sensitive" tags="zane parttwo" position="2327,3121" size="100,100">Hm. There are quite a few uses you could imagine for such an epithet, and while hurting others isn&#39;t at the top of the list, you suppose it explains why everyone around seems so overwhelmed. It also means getting everyone out as soon as possible before you do your job is absolutely critical - their pain likely amplifies his, and vice versa, in some kind of terrible positive feedback loop.
+[[Diamond Dog.|Diamond Dog. ntev]]</tw-passagedata><tw-passagedata pid="213" name="sensitive" tags="zane parttwo" position="2327,3076" size="100,100">Hm. There are quite a few uses you could imagine for such an epithet, and while hurting others isn&#39;t at the top of the list, you suppose it explains why everyone around seems so overwhelmed. It also means getting everyone out as soon as possible before you do your job is absolutely critical - their pain likely amplifies his, and vice versa, in some kind of terrible positive feedback loop.
 
 |&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b I&#39;m curious, General, do you have an epithet?|
 |&lt;img src=&quot;sprites/douglas/neutral.png&quot; width=150px&gt;|&lt;b&gt;DOUGLAS:&lt;/b&gt; Don&#39;t need one.|
 
-That&#39;s about all he seems willing to divulge on the topic. You grit your teeth and head into the back. [[Mr. Billweeds]] himself is likely around here, after all.</tw-passagedata><tw-passagedata pid="214" name="Mr. Billweeds" tags="zane parttwo" position="2327,3270" size="100,100">You can barely see him at first, shivering under a bookshelf that has partly toppled into the next one. You crouch in front of him and speak in a soft and silky voice, offering a hand out to him as you pull a little extra goodness to wrap around him.
+That&#39;s about all he seems willing to divulge on the topic. You grit your teeth and head into the back. [[Mr. Billweeds]] himself is likely around here, after all.</tw-passagedata><tw-passagedata pid="214" name="Mr. Billweeds" tags="zane parttwo" position="2327,3225" size="100,100">You can barely see him at first, shivering under a bookshelf that has partly toppled into the next one. You crouch in front of him and speak in a soft and silky voice, offering a hand out to him as you pull a little extra goodness to wrap around him.
 
-|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Mr. Billweeds, you are [[safe]] now.|</tw-passagedata><tw-passagedata pid="215" name="safe" tags="zane parttwo" position="2327,3421" size="100,100">You&#39;re suddenly aware of the fact that the whimpering you keep hearing is from him, not a broken machine or the fire.
+|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Mr. Billweeds, you are [[safe]] now.|</tw-passagedata><tw-passagedata pid="215" name="safe" tags="zane parttwo" position="2327,3376" size="100,100">You&#39;re suddenly aware of the fact that the whimpering you keep hearing is from him, not a broken machine or the fire.
 
 |&lt;img src=&quot;sprites/tommy/panik.png&quot; width=150px&gt;|&lt;b&gt;TOMMY:&lt;/b&gt; No, no, I didn&#39;t mean to - it&#39;s not really my fault - they didn&#39;t deserve - I&#39;m horrible, I don&#39;t - please, not this - I...
 |&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Mr. Billweeds?
@@ -1943,13 +2074,13 @@ This last sentence penetrates even your layers and layers of blessings and reson
 |&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; You are blabbering, sir. Let&#39;s get you-
 |&lt;img src=&quot;sprites/coper/neutral.png&quot; width=150px&gt;|&lt;b&gt;???:&lt;/b&gt; Now, now, dear, I can&#39;t have you leaving with him just yet.
 
-You whip around and glare at the [[intruder.]]</tw-passagedata><tw-passagedata pid="216" name="intruder." tags="zane parttwo" position="2327,3571" size="100,100">You think you&#39;ve seen this woman around town before, but it&#39;s hard to tell when her mascara is running dark streams all over her face. Given her uniform, though? This woman just might be the nurse you spoke with yesterday.
+You whip around and glare at the [[intruder.]]</tw-passagedata><tw-passagedata pid="216" name="intruder." tags="zane parttwo" position="2327,3526" size="100,100">You think you&#39;ve seen this woman around town before, but it&#39;s hard to tell when her mascara is running dark streams all over her face. Given her uniform, though? This woman just might be the nurse you spoke with yesterday.
 
 She pulls a crossbow off her back and nocks the arrow, a malicious look in her bloodshot eyes. Renli is at your side in a moment&#39;s notice, already twirling some cherries in her hand. General Douglas arrives shortly thereafter.
 
 |&lt;img src=&quot;sprites/nurse/coper.png&quot; width=150px&gt;|&lt;b&gt;????:&lt;/b&gt; So this is how it&#39;s going to be?|
 
-She cackles, a gratingly unsettling sound that squeezes the air out of your lungs, but is interrupted by the glass above her breaking and [[someone]] falling through.</tw-passagedata><tw-passagedata pid="217" name="someone" tags="zane parttwo" position="2327,3720" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio ilia play loop&gt;&gt;She lands with her fist punching the ground, shortly followed by another person who throws dollar bills around like confetti.
+She cackles, a gratingly unsettling sound that squeezes the air out of your lungs, but is interrupted by the glass above her breaking and [[someone]] falling through.</tw-passagedata><tw-passagedata pid="217" name="someone" tags="zane parttwo" position="2327,3675" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio ilia play loop&gt;&gt;She lands with her fist punching the ground, shortly followed by another person who throws dollar bills around like confetti.
 
 Superheroes. You grit your teeth and smile.
 
@@ -1964,12 +2095,12 @@ You start to move away, but it&#39;s too late. Ilia locks eyes with you and grin
 |&lt;img src=&quot;sprites/zane/doom.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; The worst person I&#39;ve ever had the misfortune of knowing.|
 |&lt;img src=&quot;sprites/ilia/happy.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; Aww, sorry my brother&#39;s an asshole. I&#39;m Ilia!|
 |&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; I&#39;m Renli. It&#39;s a plea-|
-|&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; Haha, that&#39;s great. Stay outta the way, [[mkay?]]|</tw-passagedata><tw-passagedata pid="218" name="mkay?" tags="zane parttwo" position="2327,3870" size="100,100">|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Hold it. What do you mean, you thought you&#39;d never see me again? I leave every summer.
+|&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; Haha, that&#39;s great. Stay outta the way, [[mkay?]]|</tw-passagedata><tw-passagedata pid="218" name="mkay?" tags="zane parttwo" position="2327,3825" size="100,100">|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Hold it. What do you mean, you thought you&#39;d never see me again? I leave every summer.
 |&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; Are you joking?
 
 Behind those obnoxious shades, you think you spot a hint of sadness.
 
-|&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; I haven&#39;t seen you in five years. You&#39;ve been here in [[Camelot]], Zane.</tw-passagedata><tw-passagedata pid="219" name="Camelot" tags="renli parttwo" position="2327,4020" size="100,100">Zane looks... astonished, to say the least, at all these revelations. Not to say that you aren&#39;t (it explains a lot of things, like his general disdain toward superheroes and especially toward Cool Girl), but you can see the world as he constructed it in his mind falling apart before him.
+|&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; I haven&#39;t seen you in five years. You&#39;ve been here in [[Camelot]], Zane.</tw-passagedata><tw-passagedata pid="219" name="Camelot" tags="renli parttwo" position="2327,3975" size="100,100">Zane looks... astonished, to say the least, at all these revelations. Not to say that you aren&#39;t (it explains a lot of things, like his general disdain toward superheroes and especially toward Cool Girl), but you can see the world as he constructed it in his mind falling apart before him.
 
 |&lt;img src=&quot;sprites/zane/doom.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; So... then... &lt;i&gt;everyone?&lt;/i&gt;|
 |&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; Uh, yeah, everyone except the wardens - you know, like, Rika, Duncan, Owen - is some kind of hardened criminal. You included, &lt;i&gt;big bro!&lt;/i&gt;|
@@ -1980,15 +2111,15 @@ Before anyone can say anything more, the nurse-slash-villain from earlier sudden
 
 |&lt;img src=&quot;sprites/zane/angry.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; HEY!|
 
-He breaks out of his train of thought and powers up, pulling everything in and leaving you winded by the sudden [[sensitivity]] that comes on.</tw-passagedata><tw-passagedata pid="220" name="sensitivity" tags="renli parttwo" position="2327,4171" size="100,100">Ilia&#39;s teammate (Richie Rich, if you remember correctly) sends dollar bills flying at the woman. You eye them; if you didn&#39;t know they were very sharp and very not real, you would probably be grabbing him and chastising him for waste. Most of them miss, and the handful of marks that are left quickly seal up, but she does release Ilia and turns to focus on blocking the hits from General Douglas&#39; cane.
+He breaks out of his train of thought and powers up, pulling everything in and leaving you winded by the sudden [[sensitivity]] that comes on.</tw-passagedata><tw-passagedata pid="220" name="sensitivity" tags="renli parttwo" position="2327,4126" size="100,100">Ilia&#39;s teammate (Richie Rich, if you remember correctly) sends dollar bills flying at the woman. You eye them; if you didn&#39;t know they were very sharp and very not real, you would probably be grabbing him and chastising him for waste. Most of them miss, and the handful of marks that are left quickly seal up, but she does release Ilia and turns to focus on blocking the hits from General Douglas&#39; cane.
 
-Zane now has a massive sword of light in his hands that&#39;s a little hard to look at directly, although you can tell it is far narrower and more elegant than Ilia&#39;s. With his power, he should be able to take the woman down in just [[one blow.]]</tw-passagedata><tw-passagedata pid="221" name="one blow." tags="renli parttwo" position="2327,4321" size="100,100">He bounces back with the same force he charged with, flipping backward and just barely landing on his feet. You&#39;re about to cheer when you realize the cut is hardly bigger than the little ones Richie is making.
+Zane now has a massive sword of light in his hands that&#39;s a little hard to look at directly, although you can tell it is far narrower and more elegant than Ilia&#39;s. With his power, he should be able to take the woman down in just [[one blow.]]</tw-passagedata><tw-passagedata pid="221" name="one blow." tags="renli parttwo" position="2327,4276" size="100,100">He bounces back with the same force he charged with, flipping backward and just barely landing on his feet. You&#39;re about to cheer when you realize the cut is hardly bigger than the little ones Richie is making.
 
 |&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; Heh, bit off more than you could chew, Za-?|
 
 John tugs you to the side, and you can only assume what happened based on the aftermath. An arrow embeds itself in the wall where you were just standing, taking off a large chunk of your fluffy hair. It must have flown right past Ilia, because you can make out a few strands of silver drifting down in the moonlight.
 
-|&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; Oh, [[fuck off.]]|</tw-passagedata><tw-passagedata pid="222" name="fuck off." tags="renli parttwo" position="2327,4471" size="100,100">Six luminescent wings burst out her back, propelling her into the air so she can drop down on the woman. She wields her sword like it weighs nothing, yet her blows are clearly doing more than anything else has - even if it still seems to be fairly little.
+|&lt;img src=&quot;sprites/ilia/smug.png&quot; width=150px&gt;|&lt;b&gt;ILIA:&lt;/b&gt; Oh, [[fuck off.]]|</tw-passagedata><tw-passagedata pid="222" name="fuck off." tags="renli parttwo" position="2327,4426" size="100,100">Six luminescent wings burst out her back, propelling her into the air so she can drop down on the woman. She wields her sword like it weighs nothing, yet her blows are clearly doing more than anything else has - even if it still seems to be fairly little.
 
 Something about the attack upsets John as well. Wordlessly, he flies up and begins charging a beam of his own, red and full of rage.
 
@@ -2000,7 +2131,7 @@ You are, in all ways, completely out of your league.
 
 You feel a little bad about leaving John behind, but it&#39;s clear he&#39;ll be fine.
 
-|&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; [[Yes.]]</tw-passagedata><tw-passagedata pid="223" name="Yes." tags="lucy parttwo" position="2281,4609" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio assassins play loop&gt;&gt;Little Lucile Locks kicks down the door before you can formulate a proper response to Rika&#39;s request. Following close behind is her friend Ralphie, a round little boy possibly a year or two younger than the Locks girl.
+|&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; [[Yes.]]</tw-passagedata><tw-passagedata pid="223" name="Yes." tags="lucy parttwo" position="2281,4564" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio assassins play loop&gt;&gt;Little Lucile Locks kicks down the door before you can formulate a proper response to Rika&#39;s request. Following close behind is her friend Ralphie, a round little boy possibly a year or two younger than the Locks girl.
 
 |&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILE:&lt;/b&gt; Big Lu!|
 |&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Lil&#39; Lu!|
@@ -2011,7 +2142,7 @@ You have &lt;i&gt;never&lt;/i&gt; heard her curse so easily.
 |&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Hey, watch your language!|
 |&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILE:&lt;/b&gt; No!|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Eugh...|
-|&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILE:&lt;/b&gt; Oh, right, this one&#39;s for [[you!]]|</tw-passagedata><tw-passagedata pid="224" name="you!" tags="lucy parttwo" position="2327,4853" size="100,100">She reveals a knife and charges at Rika, an awful giggle trailing after her. The bespectacled woman barely manages to block and knock the knife aside, then trips Lucille and tackles her. The child, however, flips them around and knees Rika in the back.
+|&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILE:&lt;/b&gt; Oh, right, this one&#39;s for [[you!]]|</tw-passagedata><tw-passagedata pid="224" name="you!" tags="lucy parttwo" position="2327,4808" size="100,100">She reveals a knife and charges at Rika, an awful giggle trailing after her. The bespectacled woman barely manages to block and knock the knife aside, then trips Lucille and tackles her. The child, however, flips them around and knees Rika in the back.
 
 As this happens, Ralphie picks up the abandoned knife and points it at Twos.
 
@@ -2029,7 +2160,7 @@ He obliges, and then his eyes glaze over.
 
 |&lt;img src=&quot;sprites/ralphie/dazed.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; Good puppy...|
 |&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; That&#39;s right. Now, if you put the knife down, you can even pet her.|
-|&lt;img src=&quot;sprites/ralphie/dazed.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; [[Knife down...]]|</tw-passagedata><tw-passagedata pid="225" name="Knife down..." tags="lucy parttwo" position="2326,4999" size="100,100">Twos makes the mistake of reaching for the knife right as he starts moving toward you, and he snaps out of his daze.
+|&lt;img src=&quot;sprites/ralphie/dazed.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; [[Knife down...]]|</tw-passagedata><tw-passagedata pid="225" name="Knife down..." tags="lucy parttwo" position="2326,4954" size="100,100">Twos makes the mistake of reaching for the knife right as he starts moving toward you, and he snaps out of his daze.
 
 |&lt;img src=&quot;sprites/ralphie/angry.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; Hey! Stay there!|
 
@@ -2040,7 +2171,7 @@ Twos freezes as he glares at her for a little longer than necessary. Sweat trick
 
 You lock eyes with Norm, who shuts his mouth and shrugs at you. You&#39;re ready to use force to get his attention again, but then he turns back to Lulu as his expression goes empty again.
 
-Finally, finally, his hand touches [[Lulu.]]</tw-passagedata><tw-passagedata pid="226" name="Lulu." tags="lucy parttwo" position="2327,5144" size="100,100">His hand and his lower arm &lt;i&gt;peel&lt;/i&gt;. There isn&#39;t really a better way to word it, especially when 
+Finally, finally, his hand touches [[Lulu.]]</tw-passagedata><tw-passagedata pid="226" name="Lulu." tags="lucy parttwo" position="2327,5099" size="100,100">His hand and his lower arm &lt;i&gt;peel&lt;/i&gt;. There isn&#39;t really a better way to word it, especially when 
 
 And with that, you realize you are safe.
 
@@ -2048,7 +2179,7 @@ And with that, you realize you are safe.
 
 In that case, she seems to have broken free - or maybe it&#39;s because you just broke his concentration and sapped away nearly all of his stamina.
 
-|&lt;img src=&quot;sprites/ralphie/cringe.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; Eww, you make it sound so [[cringe.]]|</tw-passagedata><tw-passagedata pid="227" name="cringe." tags="lucy parttwo" position="2327,5287" size="100,100">You pat his head, knowing he can&#39;t really harm you anymore. You&#39;re also not sure if he intended to in the first place.
+|&lt;img src=&quot;sprites/ralphie/cringe.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; Eww, you make it sound so [[cringe.]]|</tw-passagedata><tw-passagedata pid="227" name="cringe." tags="lucy parttwo" position="2327,5242" size="100,100">You pat his head, knowing he can&#39;t really harm you anymore. You&#39;re also not sure if he intended to in the first place.
 
 |&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; No, it&#39;s actually pretty cool.|
 |&lt;img src=&quot;sprites/ralphie/angy.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; That&#39;s right!|
@@ -2056,31 +2187,31 @@ In that case, she seems to have broken free - or maybe it&#39;s because you just
 But you can&#39;t let his ego get too inflated at this age.
 
 |&lt;img src=&quot;sprites/lucy/doubt.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; But you&#39;re a little cringe.|
-|&lt;img src=&quot;sprites/ralphie/cringe.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; I&#39;m a little [[cringe...]]|</tw-passagedata><tw-passagedata pid="228" name="cringe..." tags="lucy parttwo" position="2327,5436" size="100,100">Rika abruptly goes flying across the room and slams into the wall. She doesn&#39;t bother to get up. Lucille dusts her hands off and hops to her feet in one swift motion.
+|&lt;img src=&quot;sprites/ralphie/cringe.png&quot; width=150px&gt;|&lt;b&gt;RALPHIE:&lt;/b&gt; I&#39;m a little [[cringe...]]|</tw-passagedata><tw-passagedata pid="228" name="cringe..." tags="lucy parttwo" position="2327,5391" size="100,100">Rika abruptly goes flying across the room and slams into the wall. She doesn&#39;t bother to get up. After a few moments, Lucile dusts her hands off and hops to her feet in one swift motion.
 
 |&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILE:&lt;/b&gt; Whew! What a good workout.|
 |&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILE:&lt;/b&gt; So, how about it, Big Lu?|
 |&lt;img src=&quot;sprites/lucy/concerned.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; How about what?|
-|&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILE:&lt;/b&gt; Well, everything&#39;s going to shit. Camelot&#39;s totally going down either way, sooo... Wanna help me [[break out?]]</tw-passagedata><tw-passagedata pid="229" name="break out?" tags="lucy parttwo" position="2327,5587" size="100,100">You look over to Rika. She&#39;s bruised and battered, but conscious. Her eyes meet yours, and she sort of gives a half-shrug. She can&#39;t blame you for whatever decision you&#39;ll make.
+|&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILE:&lt;/b&gt; Well, everything&#39;s going to shit. Camelot&#39;s totally going down either way, sooo... Wanna help me [[break out?]]</tw-passagedata><tw-passagedata pid="229" name="break out?" tags="lucy parttwo" position="2327,5542" size="100,100">You look over to Rika. She&#39;s bruised and battered, but conscious. Her eyes meet yours, and she sort of gives a half-shrug. She can&#39;t blame you for whatever decision you&#39;ll make.
 
 And Twos... she just looks at you. You recall that she chose you over safety, but of course she&#39;ll want to be with Norm and Rika. Your heart would break if you hurt her like that.
 
 What about Renli and Zane? You don&#39;t think they&#39;d have a problem either way. If this place is really a prison, surely they won&#39;t mind being on the lam too much.
 
-You know [[your answer.]]</tw-passagedata><tw-passagedata pid="230" name="your answer." tags="lucy parttwo" position="2327,5735" size="100,100">Part of you can&#39;t believe you&#39;re doing this after what Rika did not too long ago, but you know it&#39;s the right decision.
+You know [[your answer.]]</tw-passagedata><tw-passagedata pid="230" name="your answer." tags="lucy parttwo" position="2327,5690" size="100,100">Part of you can&#39;t believe you&#39;re doing this after what Rika did not too long ago, but you know it&#39;s the right decision.
 
 |&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Language. And...|
 |&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; No. I have some things to do.|
 |&lt;img src=&quot;sprites/lucile/doom.png&quot; width=150px&gt;|&lt;b&gt;LUCILLE:&lt;/b&gt; Aww, that&#39;s sus! Whatever, your loss. Seeya!|
 
-She twists away from Norm&#39;s grasp and narrowly dodges one last needle thrown at her before she skips [[out.]]</tw-passagedata><tw-passagedata pid="231" name="out." tags="parttwo renli" position="2278,5877" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio radiotower play loop&gt;&gt;You and Zane are greeted by the wonderful sight of absolutely no one at the bottom of the radio station. Through the smoke, you can sort of make out what you think are some superheroes and probably-former-citizens fighting on what seems to be the remains of the bridge to the east.
+She twists away from Norm&#39;s grasp and narrowly dodges one last needle thrown at her before she skips [[out.]]</tw-passagedata><tw-passagedata pid="231" name="out." tags="parttwo renli" position="2278,5832" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio radiotower play loop&gt;&gt;You and Zane are greeted by the wonderful sight of absolutely no one at the bottom of the radio station. Through the smoke, you can sort of make out what you think are some superheroes and probably-former-citizens fighting on what seems to be the remains of the bridge to the east.
 
 |&lt;img src=&quot;sprites/zane/angry.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Great. Were they not told to stay put?|
 |&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Maybe they got bored and went inside? You know how Lucy and Twos are.|
 
-You can tell based on his grimace that he doubts it, but it seems he figures it won&#39;t hurt to scour the station&#39;s [[interior]].</tw-passagedata><tw-passagedata pid="232" name="interior" tags="parttwo renli" position="2335,6123" size="100,100">For the most part, everything is exactly as it was an hour ago - dark, disorganized, and overall rather drab. But when you reach December&#39;s floor, it takes you no time to realize something has happened. The messy tables have been overturned, scattering papers and utensils across the floor. One lightbulb flickers ominously, its light glinting off the remains of its shattered neighbor.
+You can tell based on his grimace that he doubts it, but it seems he figures it won&#39;t hurt to scour the station&#39;s [[interior]].</tw-passagedata><tw-passagedata pid="232" name="interior" tags="parttwo renli" position="2335,6078" size="100,100">For the most part, everything is exactly as it was an hour ago - dark, disorganized, and overall rather drab. But when you reach December&#39;s floor, it takes you no time to realize something has happened. The messy tables have been overturned, scattering papers and utensils across the floor. One lightbulb flickers ominously, its light glinting off the remains of its shattered neighbor.
 
-|&lt;img src=&quot;sprites/zane/sweat.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; [[December?]]|</tw-passagedata><tw-passagedata pid="233" name="December?" tags="parttwo renli" position="2335,6275" size="100,100">A shambling mound emerges from beneath a desk that has collapsed inward from some kind of overhead impact. You&#39;re honestly too amazed she managed to hide there of all places to question why she would choose such a strange lean-to for protection.
+|&lt;img src=&quot;sprites/zane/sweat.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; [[December?]]|</tw-passagedata><tw-passagedata pid="233" name="December?" tags="parttwo renli" position="2335,6230" size="100,100">A shambling mound emerges from beneath a desk that has collapsed inward from some kind of overhead impact. You&#39;re honestly too amazed she managed to hide there of all places to question why she would choose such a strange lean-to for protection.
 
 |&lt;img src=&quot;sprites/december/spaced.png&quot; width=150px&gt;|&lt;b&gt;DECEMBER:&lt;/b&gt; Haha, Z, my guy! And Ren-ren, you too. Back so soon, huh?|
 
@@ -2098,7 +2229,7 @@ Though she tries her best to sound upbeat, it&#39;s obvious she is, as Lucy woul
 |&lt;img src=&quot;sprites/lucy/doubt.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; You know... that might not be all that far off for once.|
 |&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; He&#39;s pretty tall, though. I don&#39;t think he could hide very easily, even if it&#39;s all a mess.|
 |&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; True. Plus, we can see the floor now, and there aren&#39;t really a lot of other places to hide here.|
-|&lt;img src=&quot;sprites/zane/angry.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; My head hurts. Can we please just [[leave?|head back to Dunk’s.]]|</tw-passagedata><tw-passagedata pid="235" name="together," tags="parttwo renli" position="2335,6424" size="100,100">While you feel sorry for December, as she&#39;s dealing with the consequences of her past only a bit better than Tommy was, you have much bigger fish to fry. Or - maybe not fry. You should probably rework some common idioms, knowing what you now know about Twos.
+|&lt;img src=&quot;sprites/zane/angry.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; My head hurts. Can we please just [[leave?|head back to Dunk’s.]]|</tw-passagedata><tw-passagedata pid="235" name="together," tags="parttwo renli" position="2335,6379" size="100,100">While you feel sorry for December, as she&#39;s dealing with the consequences of her past only a bit better than Tommy was, you have much bigger fish to fry. Or - maybe not fry. You should probably rework some common idioms, knowing what you now know about Twos.
 
 |&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; I suggest you head to the police department. You should be safe there.|
 |&lt;img src=&quot;sprites/december/spaced.png&quot; width=150px&gt;|&lt;b&gt;DECEMBER:&lt;/b&gt; Is that where you&#39;re going?|
@@ -2107,7 +2238,7 @@ Though she tries her best to sound upbeat, it&#39;s obvious she is, as Lucy woul
 |&lt;img src=&quot;sprites/zane/smug.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Miss December, you are hardly an incapable woman. You can head there yourself.|
 |&lt;img src=&quot;sprites/december/spaced.png&quot; width=150px&gt;|&lt;b&gt;DECEMBER:&lt;/b&gt; Please?|
 |&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; You know, we should check the French Quarter next. And since the bridge is a bit occupied, we&#39;ll have to go around, won&#39;t we?|
-|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; [[... Fair enough.]]|</tw-passagedata><tw-passagedata pid="236" name="... Fair enough." tags="parttwo renli" position="2335,6575" size="100,100">|&lt;img src=&quot;sprites/december/spaced.png&quot; width=150px&gt;|&lt;b&gt;DECEMBER:&lt;/b&gt; Thank you so much. Let me just... I need to pack...|
+|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; [[... Fair enough.]]|</tw-passagedata><tw-passagedata pid="236" name="... Fair enough." tags="parttwo renli" position="2335,6530" size="100,100">|&lt;img src=&quot;sprites/december/spaced.png&quot; width=150px&gt;|&lt;b&gt;DECEMBER:&lt;/b&gt; Thank you so much. Let me just... I need to pack...|
 
 With a glazed look in her eyes, she starts grabbing at the air around her, occasionally swiveling her upper body a bit.
 
@@ -2122,35 +2253,41 @@ December suddenly stops and looks right at you, as if she didn&#39;t notice you 
 |&lt;img src=&quot;sprites/zane/doom.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Renli. Do you think she&#39;ll be safer here?|
 |&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Considering no one has targeted the tower yet, I think so.|
 |&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Then our best course of action is to leave her be.|
-|&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Shall we head to the [[French Quarter]], then?|</tw-passagedata><tw-passagedata pid="237" name="French Quarter" tags="22 parttwo" position="2286,6717" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio frenchquarter play loop&gt;&gt;Norm patches up Ralphie in the corner at the opposite end of the room as yourself, joking around with the little rascal and managing to get a few laughs out of him. You nervously twirl your hair between your fingers, trying to make your existence draw as little attention as possible. After all, you sit right between two very powerful Inscribed who could not more clearly be stewing in [[their own thoughts.]]</tw-passagedata><tw-passagedata pid="238" name="speak." tags="22 parttwo" position="2346,7121" size="100,100">Lucy begins with your search for Mason. You fill in a few details, but you let her call the shots on how much to say. Rika listens carefully, silent and face unchanging the entire time. In the end, she tells her everything - including the strange woman from the ocean.
+|&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Shall we head to the [[French Quarter]], then?|</tw-passagedata><tw-passagedata pid="237" name="French Quarter" tags="22 parttwo" position="2286,6672" size="200,200">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio frenchquarter play loop&gt;&gt;Norm patches up Ralphie in the corner at the opposite end of the room as yourself, joking around with the little rascal and managing to get a few laughs out of him. You nervously twirl your hair between your fingers, trying to make your existence draw as little attention as possible. After all, you sit right between two very powerful Inscribed who could not more clearly be stewing in [[their own thoughts.]]</tw-passagedata><tw-passagedata pid="238" name="speak." tags="22 parttwo" position="2346,7076" size="100,100">Lucy begins with your search for Mason. You fill in a few details, but you let her call the shots on how much to say. Rika listens carefully, silent and face unchanging the entire time. In the end, she tells her about everything - including the strange woman from the ocean.
 
 |&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Shit.|
 |&lt;img src=&quot;sprites/22/um.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; What is it?|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; She&#39;s further along than we thought. Let&#39;s - we need to go to Mason&#39;s.|
-|&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Well, I don&#39;t think Ralphie&#39;s ready to get walking just yet. I&#39;ll meet up with you later, okay?|
+|&lt;img src=&quot;sprites/lucy/concerned.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Aren&#39;t we forgetting something?|
+
+She gestures toward Rika&#39;s wounds - most notably, the cut on her upper arm that she&#39;s very poorly attempting to conceal.
+
+|&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Doesn&#39;t matter. If things are bad enough, you&#39;ll want me there.
+|&lt;img src=&quot;sprites/22/neutral.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; Then... Norm?|
+|&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Well, as much as I&#39;d love to help out, I don&#39;t think Ralphie&#39;s ready to get walking just yet. I&#39;ll meet up with you later, okay?|
 
 You run over to give Norm a hug, Ralphie a nervous nod, and then hurry to the door.
 
-|&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; So, why Mason&#39;s? Do you think [[something]] happened with him?|</tw-passagedata><tw-passagedata pid="239" name="their own thoughts." tags="22 parttwo" position="2345,6972" size="100,100">|&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; ... Thank you.|
+|&lt;img src=&quot;sprites/lucy/neutral.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; So, why Mason&#39;s? Do you think [[something]] happened with him?|</tw-passagedata><tw-passagedata pid="239" name="their own thoughts." tags="22 parttwo" position="2345,6927" size="100,100">|&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; ... Thank you.|
 |&lt;img src=&quot;sprites/lucy/angy.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Just because I&#39;m willing to work with you doesn&#39;t mean I forgive you.|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; That&#39;s fine; I understand. But I &lt;i&gt;am&lt;/i&gt; going to need to to tell me everything you know.|
 |&lt;img src=&quot;sprites/lucy/unimpressed.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; ...|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; It&#39;ll let me know how much I need to fill in.|
 
-Lucy takes a deep breath, and you realize her shoulders are shaking a bit. You reach out to give her a pat, locking eyes momentarily before she begins to [[speak.]]</tw-passagedata><tw-passagedata pid="240" name="something" tags="22 parttwo" position="2346,7271" size="100,100">|&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Something like that, very likely.|
+Lucy takes a deep breath, and you realize her shoulders are shaking a bit. You reach out to give her a pat, locking eyes momentarily before she begins to [[speak.]]</tw-passagedata><tw-passagedata pid="240" name="something" tags="22 parttwo" position="2346,7226" size="100,100">|&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Very likely, yes.|
 |&lt;img src=&quot;sprites/lucy/doubt.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; I mean, it&#39;s just Mason. What&#39;s he gonna do, challenge everyone in town to a rap battle?|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; No. He&#39;s - ugh. I hate to say this about... well, a friend. But...|
 
 &lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio comicstore play loop&gt;&gt;It only takes a minute to make it to the store. The door has been torn off its hinges and thrown across the street, and one window is smashed in. You look to Rika, who quickly moves toward the back room, lips pressed into a firm line.
 
-|&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Mason is dangerous. He is - or, was - [[the second-most powerful inscribed in the world.]]|</tw-passagedata><tw-passagedata pid="241" name="the second-most powerful inscribed in the world." tags="22 parttwo" position="2346,7421" size="100,100">|&lt;img src=&quot;sprites/lucy/shocked.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; He... &lt;i&gt;what?&lt;/i&gt;|
+|&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Mason is dangerous. He is - or, was - [[the second-most powerful inscribed in the world.]]|</tw-passagedata><tw-passagedata pid="241" name="the second-most powerful inscribed in the world." tags="22 parttwo" position="2346,7376" size="100,100">|&lt;img src=&quot;sprites/lucy/shocked.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; He... &lt;i&gt;what?&lt;/i&gt;|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; I know it sounds impossible. But his epithet allows him to, effectively, counter any other epithet.|
 |&lt;img src=&quot;sprites/22/um.png&quot; width=150px&gt;|&lt;b&gt;TWENTY-TWO:&lt;/b&gt; And I&#39;m guessing he&#39;s... you know...?|
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; An inmate? Yes. And if we aren&#39;t too late, we&#39;re going to need Duncan&#39;s help.|
 |&lt;img src=&quot;sprites/lucy/doubt.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Are you sure? The two of us could be pretty powerful together.|
 |&lt;img src=&quot;sprites/rika/angry.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; Yes. Duncan is the only one who might stand a chance against him.|
 
-She touches an empty space on the wall, and suddenly you realize [[the sword is missing.]]</tw-passagedata><tw-passagedata pid="242" name="the sword is missing." tags="22 parttwo" position="2346,7572" size="100,100">The sword isn&#39;t the only thing, either. These revelations have rattled you to the point where you only just notice that there&#39;s also a hole in the wall, large enough for someone to squeeze through.
+She touches an empty space on the wall, and suddenly you realize [[the sword is missing.]]</tw-passagedata><tw-passagedata pid="242" name="the sword is missing." tags="22 parttwo" position="2346,7527" size="100,100">The sword isn&#39;t the only thing, either. These revelations have rattled you to the point where you barely register that there&#39;s also a hole in the wall, just large enough for someone to squeeze through.
 
 |&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RIKA:&lt;/b&gt; This... isn&#39;t right.|
 
@@ -2158,20 +2295,20 @@ Without consulting you or Lucy, she slips into the darkness.
 
 |&lt;img src=&quot;sprites/lucy/doubt.png&quot; width=150px&gt;|&lt;b&gt;LUCY:&lt;/b&gt; Welp, guess we only have one choice.|
 
-[[You follow.]]</tw-passagedata><tw-passagedata pid="243" name="You follow." tags="parttwo zane" position="2305,7712" size="200,200">|&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio beautyflow play loop&gt;&gt;&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; You know... with everything going on, we haven&#39;t discussed what will happen afterward.|
+[[You follow.]]</tw-passagedata><tw-passagedata pid="243" name="You follow." tags="parttwo zane" position="2305,7663" size="200,200">|&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio oceansfx volume 0.2 play loop&gt;&gt;&lt;&lt;audio beautyflow play loop&gt;&gt;&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; You know... with everything going on, we haven&#39;t discussed what will happen afterward.|
 ||&lt;b&gt;RENLI:&lt;/b&gt; I&#39;m unsure whether we&#39;ll even make it out of here.|
 |&lt;img src=&quot;sprites/zane/doom.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; ... Hearing that from you of all people is offputting, to say the least.|
 |&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; I&#39;m just kidding! I know we&#39;ll be fine in the end.|
 
-|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;You and Renli are on your way to the French Quarter in hopes of locating 22, Lucy, Rika, and Norm. Although the two of you will probably be fine on your own, there is clearly a great deal at play that you don&#39;t understand (or can&#39;t remember, apparently). So, while, you can&#39;t quite trust him just yet, Norm is your best bet at staying safe.
+You and Renli are on your way to the French Quarter in hopes of locating 22, Lucy, Rika, and Norm. Although the two of you will probably be fine on your own, there is clearly a great deal at play that you don&#39;t understand (or can&#39;t remember, apparently). So, while, you can&#39;t quite trust him just yet, Norm is your best bet at staying safe.
 
-Besides, as much as you hate to admit it, you&#39;re worried about 22 and Lucy. Twos seemed to be handling the news relatively well, but whatever Lucy remembered during the fight had a negative effect on her. You can only hope that [[she won&#39;t lash out too much.]]</tw-passagedata><tw-passagedata pid="244" name="she won&#39;t lash out too much." tags="zane parttwo" position="2354,7972" size="100,100">|&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Hey, look! Is that Duncan... and Mason?|
+Besides, as much as you hate to admit it, you&#39;re worried about 22 and Lucy. Twos seemed to be handling the news relatively well, but whatever Lucy remembered during the fight had a negative effect on her. You can only hope that [[she won&#39;t lash out too much.]]</tw-passagedata><tw-passagedata pid="244" name="she won&#39;t lash out too much." tags="zane parttwo" position="2354,7926" size="100,100">|&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Hey, look! Is that Duncan... and Mason?|
 
-You squint in the direction she points. Mere meters away from the docks, the blond stands atop a column of billowing water, fists resting on his hips in some kind of power pose. Across from him, perched on a pillar of light with a massive sword slung over his shoulders, is everyone&#39;s favorite comic store owner. You recognize the sword as the one at the back of the store - the same one Twos very nearly attempted to steal. If you strain you ears, you think you can hear them shouting about rapscallions.
+You squint in the direction she points. Mere meters away from the docks, the blond stands atop a column of billowing water, fists resting on his hips in some kind of power pose. Across from him, perched on a pillar of light with a massive sword slung over his shoulders, is everyone&#39;s favorite comic store owner. You recognize the sword as the one at the back of the store - the same one Twos very nearly attempted to steal. If you strain your ears, you think you can hear them shouting about rapscallions.
 
 Just as you recall Ilia mentioning Mason was once a superhero before becoming a criminal worthy of Camelot, Renli hurries over to them, waving and calling out their names.
 
-A clear death sentence. [[You follow reluctantly.|gimme monei]]</tw-passagedata><tw-passagedata pid="245" name="gimme monei" tags="zane parttwo" position="2354,8122" size="100,100">|&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio jerryfive play loop&gt;&gt;&lt;img src=&quot;sprites/mason/smile.png&quot; width=150px&gt;|&lt;b&gt;MASON:&lt;/b&gt; Aw, hey guys, what&#39;s the biz!|
+A clear death sentence. [[You follow reluctantly.|gimme monei]]</tw-passagedata><tw-passagedata pid="245" name="gimme monei" tags="zane parttwo" position="2354,8077" size="100,100">|&lt;img src=&quot;sprites/mason/smile.png&quot; width=150px&gt;|&lt;b&gt;MASON:&lt;/b&gt; Aw, hey guys, what&#39;s the biz!|
 |&lt;img src=&quot;sprites/duncan/neutral.png&quot; width=150px&gt;|&lt;b&gt;DUNCAN:&lt;/b&gt; Renli, Zane! Haven&#39;t seen you in a while.|
 |&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; So much! So much has been happening. Looks like you two are about to duel?|
 |&lt;img src=&quot;sprites/zane/angery.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; &lt;i&gt;Renli no you can&#39;t just say that you&#39;re suppposed to de-escalate the-&lt;/i&gt;|
@@ -2180,7 +2317,7 @@ A clear death sentence. [[You follow reluctantly.|gimme monei]]</tw-passagedata>
 |&lt;img src=&quot;sprites/renli/peace.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Aww, so sweet of you to worry about us.|
 |&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; But I actually came here for business purposes. Duncan?|
 |&lt;img src=&quot;sprites/duncan/angry.png&quot; width=150px&gt;|&lt;b&gt;DUNCAN:&lt;/b&gt; Huh?|
-|&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; I punched Mason, so [[you owe me $20!]]|</tw-passagedata><tw-passagedata pid="246" name="you owe me $20!" tags="zane parttwo" position="2354,8272" size="100,100">She&#39;s endangering the two of you for twenty dollars.
+|&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; I punched Mason, so [[you owe me $20!]]|</tw-passagedata><tw-passagedata pid="246" name="you owe me $20!" tags="zane parttwo" position="2354,8226" size="100,100">&lt;&lt;audio beautyflow stop&gt;&gt;She&#39;s endangering the two of you for twenty dollars.
 
 You want to vomit.
 
@@ -2195,23 +2332,18 @@ You feel like you&#39;re losing your mind.
 He sighs. The water sweeps him over to the docks where you stand as he digs through his pockets for his wallet.
 
 |&lt;img src=&quot;sprites/duncan/neutral.png&quot; width=150px&gt;|&lt;b&gt;DUNCAN:&lt;/b&gt; Uh... I only have $15. Can you get the rest from the register? Please?|
-|&lt;img src=&quot;sprites/renli/ominous.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; [[No.]]|</tw-passagedata><tw-passagedata pid="247" name="No." tags="zane parttwo" position="2354,8421" size="100,100">Duncan scratches his head, and you think you see worry flash in his eyes. You have never known this man to show any fear for his own safety, and yet your spacey, smiley, five-foot-nine, pink-haired friend is making him consider giving up a fight that will probably prevent the end of the world as you know it.
+|&lt;img src=&quot;sprites/renli/ominous.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; [[No.]]|</tw-passagedata><tw-passagedata pid="247" name="No." tags="zane parttwo" position="2354,8376" size="100,100">Duncan scratches his head, and you think you see worry flash in his eyes. You have never known this man to show any fear for his own safety, and yet your spacey, smiley, five-foot-nine, pink-haired friend is making him consider giving up a fight that will probably prevent the end of the world as you know it.
 
 For an extra five bucks.
 
 He flies back over to Mason with an uncharacteristically serious expression.
 
 |&lt;img src=&quot;sprites/duncan/angry.png&quot; width=150px&gt;|&lt;b&gt;DUNCAN:&lt;/b&gt; Shucks... Mason, can I get a little help here?|
-|&lt;img src=&quot;sprites/mason/surprised.png&quot; width=150px&gt;|&lt;b&gt;MASON:&lt;/b&gt; Uh, yeah, [[sure thing,]] dude!|</tw-passagedata><tw-passagedata pid="248" name="sure thing," tags="zane parttwo" position="2354,8571" size="100,100">The greaser approaches in a similar manner as the lifeguard and dumps his wallet out in his hand. Four ones and a ton of coins spill out - he hands the bills right over to Renli and starts counting the coins. The process is exceedingly slow, especially when he has to stop to check what type of coin half of them are. The display is shocking, considering his occupation. No one speaks for fear of messing up his count.
+|&lt;img src=&quot;sprites/mason/surprised.png&quot; width=150px&gt;|&lt;b&gt;MASON:&lt;/b&gt; Uh, yeah, [[sure thing,]] dude!|</tw-passagedata><tw-passagedata pid="248" name="sure thing," tags="zane parttwo" position="2354,8526" size="100,100">The greaser approaches in a similar manner as the lifeguard and dumps his wallet out in his hand. Four ones and a ton of coins spill out - he hands the bills right over to Renli and starts counting the coins. The process is exceedingly slow, especially when he has to stop to check what type of coin half of them are. And the display is shocking, considering his occupation. No one speaks for fear of messing up his count.
 
 |&lt;img src=&quot;sprites/mason/neutral.png&quot; width=150px&gt;|&lt;b&gt;MASON:&lt;/b&gt; Here you go! Exactly 100 cents.|
 
-He carefully drops the coins in Renli&#39;s cupped hands and waits for her approval. She looks at them and makes quick calculations (at least, you assume she does; you&#39;ve always known her to be strict about exact cents), then pockets the money with a smile.
-
-|&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Thanks, guys! I knew I could count on you.|
-|&lt;img src=&quot;sprites/mason/neutral.png&quot; width=150px&gt;|&lt;b&gt;MASON:&lt;/b&gt; Yep, yep. Now, scurry on out!|
-
-You don&#39;t wait to follow his advice this time, grabbing Renli by the wrist and [[dragging her out of there.]]</tw-passagedata><tw-passagedata pid="249" name="dragging her out of there." tags="zane parttwo" position="2354,8722" size="100,100">|&lt;img src=&quot;sprites/renli/angy.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Why did you have to pull me away like that?|
+He carefully drops the coins in Renli&#39;s cupped hands and waits for her approval. She looks at them and makes quick calculations (at least, you assume she does; you&#39;ve always known her to be strict about exact cents), then pockets the money with [[a smile.]]</tw-passagedata><tw-passagedata pid="249" name="dragging her out of there." tags="zane parttwo" position="2354,8800" size="100,100">|&lt;img src=&quot;sprites/renli/angy.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Why did you have to pull me away like that?|
 |&lt;img src=&quot;sprites/zane/angry.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Are you aware of how dangerous that situation was? We&#39;re lucky we managed to leave at all!|
 |&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Well, yes, I&#39;m not dumb. But sometimes, all it takes is a bit of relief to make the tension less angry.|
 |&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Also, I needed my money.|
@@ -2253,17 +2385,32 @@ And Lucy, you remember things got more serious. The friends you made doing this,
 
 You did some bad things, too. Minor things, petty robbery, minor theft, some arson, some looting. Things that, at the time, you justified to yourself. Necessary evils to make a safer world where young girls didn’t have to wake up every morning dreading going back to school or walking down the street.
 
-You didn’t really think you were someone who thought about necessary evils. You felt normal. You still hung out with your friends - sometimes, when you could. You had a social life. You were almost sixteen, and you still felt almost sixteen. When you were out of costume and in the comfort of your own home, you felt [[almost normal.]]</tw-passagedata><tw-passagedata pid="256" name="previously assumed." tags="zane parttwo" position="2354,8872" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio frenchquarter play loop&gt;&gt;You pass through the doors of the French Quarter half-expecting to see Lucy and Rika locked in fisticuffs, but only Norm and a heavily-bandaged Ralphie greet you.
+You didn’t really think you were someone who thought about necessary evils. You felt normal. You still hung out with your friends - sometimes, when you could. You had a social life. You were almost sixteen, and you still felt almost sixteen. When you were out of costume and in the comfort of your own home, you felt [[almost normal.]]</tw-passagedata><tw-passagedata pid="256" name="previously assumed." tags="zane parttwo" position="2356,8933" size="100,100">&lt;&lt;audio &quot;:all&quot; stop&gt;&gt;&lt;&lt;audio frenchquarter play loop&gt;&gt;You pass through the doors of the French Quarter half-expecting to see Lucy and Rika locked in fisticuffs, but only Norm and a heavily-bandaged Ralphie greet you.
 
 |&lt;img src=&quot;sprites/zane/sweat.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Where is everyone?|
 |&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Twos, Rika, and Lucy went on over to the comics store. How&#39;d you find us, anyway?|
-|&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; With Twos in the group, we figured |</tw-passagedata><tw-passagedata pid="257" name="rika flashback" tags="rika parttwo" position="2264,340" size="200,200">Rika Koizumi, you are twelve years old, and your world has just ended. A queen is dead, and all you have worked for - all you have worshipped - is gone. You are a shame to your family, a blackened stain upon an extensive line of those who protected gods and kings and queens from the shadows.
+|&lt;img src=&quot;sprites/renli/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; With Twos in the group, we figured she would want to come here.|
+|&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Haha, that&#39;s right! She always goes after what&#39;s in her heart.|
+|&lt;img src=&quot;sprites/rika/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; In my opinion, it&#39;s her most admirable trait!|
+
+Enough of that. If you wanted to hear Renli and Twos&#39; dad gushing over Twenty-Two, you would simply place them all in the same room and watch. You do, however, have [[a question.]]</tw-passagedata><tw-passagedata pid="257" name="rika flashback" tags="rika parttwo" position="2264,342" size="200,200">Rika Koizumi, you are twelve years old, and your world has just ended. A queen is dead, and all you have worked for - all you have worshipped - is gone. You are a shame to your family, a blackened stain upon an extensive line of those who protected gods and kings and queens from the shadows.
 
 At least in losing everything, you gained one thing. You remember fulfilling your queen&#39;s final wish, for you to escape with your life. You remember salty tears evaporating off your face. You remember wanting to be small, to be reduced to a mere &lt;i&gt;speck&lt;/i&gt; - and suddenly it was so.
 
-[[Afterward, life is a blur.]]</tw-passagedata><tw-passagedata pid="258" name="Afterward, life is a blur." tags="rika parttwo" position="2305,562" size="100,100">Now you&#39;re twenty years old, and life has circled you back into the very same purpose with which you began. You take to protect, keeping others safe with your own life on the line. Your work is always quiet and never on display - not that it makes a difference; you would never want that kind of attention, anyhow.
+Afterward, [[life is a blur.]]</tw-passagedata><tw-passagedata pid="258" name="life is a blur." tags="rika parttwo" position="2304,594" size="100,100">Now you&#39;re twenty years old, and life has circled you back into the very same purpose with which you began. You take to protect, keeping others safe with your own life on the line. Your work is always quiet and never on display - not that it makes a difference; you would never want that kind of attention, anyhow.
 
-[[yeah.|part two starts fr]]</tw-passagedata></tw-storydata>
+Still, the handful who know of your silent deeds take note of your exceptional productivity. At twenty-one, you take on the new and ever more thankless job of warden at the George Arthur Correctional Facility. You have a few coworkers - like Owen, who holes up in his corner of &quot;town&quot;, and Duncan, who becomes your first friend in a while - who play their roles so seamlessly you almost &lt;i&gt;forget&lt;/i&gt; your purpose.
+
+It&#39;s not just them, to be fair. It&#39;s hard to remember what is real and what is constructed when no cruelty shows here. When certain files are classified and you never get to know what evil lurks behind. When... [[when...|part two starts fr]]</tw-passagedata><tw-passagedata pid="259" name="a smile." tags="zane parttwo" position="2356,8663" size="100,100">|&lt;&lt;audio itemgetsfx play&gt;&gt;&lt;img src=&quot;sprites/renli/sparkle.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; Thanks, guys! I knew I could count on you.|
+|&lt;img src=&quot;sprites/mason/neutral.png&quot; width=150px&gt;|&lt;b&gt;MASON:&lt;/b&gt; Yep, yep. Now, scurry on out!|
+
+You don&#39;t wait to follow his advice this time, grabbing Renli by the wrist and [[dragging her out of there.]]</tw-passagedata><tw-passagedata pid="260" name="a question." tags="zane parttwo" position="2356,9082" size="100,100">|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; In any case, what happened here?|
+|&lt;img src=&quot;sprites/norm/neutral.png&quot; width=150px&gt;|&lt;b&gt;NORM:&lt;/b&gt; Oh, right. Lucile broke in, knocked out Rika, asked your friend with the dog to join her, and left. Ralphie here tried to help Lucile in the fight, but... well, you can see how that went!|
+|&lt;img src=&quot;sprites/rika/neutral.png&quot; width=150px&gt;|&lt;b&gt;RENLI:&lt;/b&gt; How unfortunate. I hope you feel well soon, Ralphie.|
+
+You give her a moment to offer him some food to accelerate his healing process. When she doesn&#39;t, it occurs to you that &lt;i&gt;Ralphie assisting Lucile&lt;/i&gt; likely meant he harmed Twos or Lucy - and in Renli&#39;s books, well, such behavior is simply unacceptable.
+
+|&lt;img src=&quot;sprites/zane/neutral.png&quot; width=150px&gt;|&lt;b&gt;ZANE:&lt;/b&gt; Lovely seeing you, Mr. Norm. We&#39;re [[off to the comic store.]]|</tw-passagedata><tw-passagedata pid="261" name="off to the comic store." tags="zane parttwo" position="2356,9232" size="100,100">Double-click this passage to edit it.</tw-passagedata></tw-storydata>
 	<script id="script-sugarcube" type="text/javascript">
 	/*! SugarCube JS */
 	if(document.documentElement.getAttribute("data-init")==="loading"){!function(window,document,jQuery,undefined){"use strict";function _classCallCheck(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function _toConsumableArray(e){if(Array.isArray(e)){for(var t=0,r=Array(e.length);t<e.length;t++)r[t]=e[t];return r}return Array.from(e)}var _createClass=function(){function e(e,t){for(var r=0;r<t.length;r++){var n=t[r];n.enumerable=n.enumerable||!1,n.configurable=!0,"value"in n&&(n.writable=!0),Object.defineProperty(e,n.key,n)}}return function(t,r,n){return r&&e(t.prototype,r),n&&e(t,n),t}}(),_slicedToArray=function(){function e(e,t){var r=[],n=!0,a=!1,i=undefined;try{for(var o,s=e[Symbol.iterator]();!(n=(o=s.next()).done)&&(r.push(o.value),!t||r.length!==t);n=!0);}catch(e){a=!0,i=e}finally{try{!n&&s.return&&s.return()}finally{if(a)throw i}}return r}return function(t,r){if(Array.isArray(t))return t;if(Symbol.iterator in Object(t))return e(t,r);throw new TypeError("Invalid attempt to destructure non-iterable instance")}}(),_typeof="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e},errorPrologRegExp=/^(?:(?:uncaught\s+(?:exception:\s+)?)?\w*(?:error|exception|_err):\s+)+/i,Alert=function(){function e(e,t,r,n){var a="fatal"===e,i="Apologies! "+(a?"A fatal":"An")+" error has occurred.";i+=a?" Aborting.":" You may be able to continue, but some parts may not work properly.",null==t&&null==r||(i+="\n\nError",null!=t&&(i+=" ["+t+"]"),i+=null!=r?": "+r.replace(errorPrologRegExp,"")+".":": unknown error."),"object"===(void 0===n?"undefined":_typeof(n))&&null!==n&&n.stack&&(i+="\n\nStack Trace:\n"+n.stack),window.alert(i)}function t(t,r,n){e(null,t,r,n)}function r(t,r,n){e("fatal",t,r,n)}return function(e){window.onerror=function(n,a,i,o,s){"complete"===document.readyState?t(null,n,s):(r(null,n,s),window.onerror=e,"function"==typeof window.onerror&&window.onerror.apply(this,arguments))}}(window.onerror),Object.freeze(Object.defineProperties({},{error:{value:t},fatal:{value:r}}))}(),Patterns=function(){var e=function(){var e=new Map([[" ","\\u0020"],["\f","\\f"],["\n","\\n"],["\r","\\r"],["\t","\\t"],["\v","\\v"],[" ","\\u00a0"],[" ","\\u1680"],["᠎","\\u180e"],[" ","\\u2000"],[" ","\\u2001"],[" ","\\u2002"],[" ","\\u2003"],[" ","\\u2004"],[" ","\\u2005"],[" ","\\u2006"],[" ","\\u2007"],[" ","\\u2008"],[" ","\\u2009"],[" ","\\u200a"],["\u2028","\\u2028"],["\u2029","\\u2029"],[" ","\\u202f"],[" ","\\u205f"],["　","\\u3000"],["\ufeff","\\ufeff"]]),t=/^\s$/,r="";return e.forEach(function(e,n){t.test(n)||(r+=e)}),r?"[\\s"+r+"]":"\\s"}(),t="[\\u0020\\f\\t\\v\\u00a0\\u1680\\u180e\\u2000-\\u200a\\u202f\\u205f\\u3000\\ufeff]",r="\\s"===e?"\\S":e.replace(/^\[/,"[^"),n="[0-9A-Z_a-z\\-\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u00ff\\u0150\\u0170\\u0151\\u0171]",a=n.replace("\\-",""),i=function(){var e="(?:[\\x2D.0-9A-Z_a-z\\xB7\\xC0-\\xD6\\xD8-\\xF6\\xF8-\\u037D\\u037F-\\u1FFF\\u200C\\u200D\\u203F\\u2040\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD]|[\\uD800-\\uDB7F][\\uDC00-\\uDFFF])";return"[A-Za-z](?:"+e+"*-"+e+"*|[0-9A-Za-z]*)"}(),o=function(){return"("+n+"+)\\(([^\\)\\|\\n]+)\\):|"+t+"*("+n+"+)"+t+"*:([^;\\|\\n]+);|"+t+"*((?:[#.]"+n+"+"+t+"*)+);"}();return Object.freeze({space:e,spaceNoTerminator:t,lineTerminator:"[\\n\\r\\u2028\\u2029]",notSpace:r,anyChar:"(?:.|[\\n\\r\\u2028\\u2029])",anyLetter:n,anyLetterStrict:a,identifierFirstChar:"[$A-Z_a-z]",identifierNextChar:"[$0-9A-Z_a-z]",identifier:"[$A-Z_a-z][$0-9A-Z_a-z]*",variableSigil:"[$_]",variable:"[$_][$A-Z_a-z][$0-9A-Z_a-z]*",macroName:"[A-Za-z][\\w-]*|[=-]",templateName:"[A-Za-z][\\w-]*",htmlTagName:i,cssIdOrClassSigil:"[#.]",cssImage:"\\[[<>]?[Ii][Mm][Gg]\\[(?:\\s|\\S)*?\\]\\]+",inlineCss:o,url:"(?:file|https?|mailto|ftp|javascript|irc|news|data):[^\\s'\"]+"})}();!function(){function e(e,t){var r=Number.parseInt(e,10)||0;if(r<1)return"";var n=void 0===t?"":String(t);for(""===n&&(n=" ");n.length<r;){var a=n.length,i=r-a;n+=a>i?n.slice(0,i):n}return n.length>r&&(n=n.slice(0,r)),n}var t=function(){function e(e,n){var a=String(e);if(!a)return a;switch(n){case"start":return t.test(a)?a.replace(t,""):a;case"end":return r.test(a)?a.replace(r,""):a;default:throw new Error('_trimString called with incorrect where parameter value: "'+n+'"')}}var t=new RegExp("^"+Patterns.space+Patterns.space+"*"),r=new RegExp(""+Patterns.space+Patterns.space+"*$");return e}();Array.prototype.flat||Object.defineProperty(Array.prototype,"flat",{configurable:!0,writable:!0,value:function(){function e(){if(null==this)throw new TypeError("Array.prototype.flat called on null or undefined");var t=0===arguments.length?1:Number(arguments[0])||0;return t<1?Array.prototype.slice.call(this):Array.prototype.reduce.call(this,function(r,n){return n instanceof Array?r.push.apply(r,_toConsumableArray(e.call(n,t-1))):r.push(n),r},[])}return e}()}),Array.prototype.flatMap||Object.defineProperty(Array.prototype,"flatMap",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.flatMap called on null or undefined");return Array.prototype.map.apply(this,arguments).flat()}}),Array.prototype.includes||Object.defineProperty(Array.prototype,"includes",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.includes called on null or undefined");if(0===arguments.length)return!1;var e=this.length>>>0;if(0===e)return!1;var t=arguments[0],r=Number(arguments[1])||0;for(r<0&&(r=Math.max(0,e+r));r<e;++r){var n=this[r];if(n===t||n!==n&&t!==t)return!0}return!1}}),Object.entries||Object.defineProperty(Object,"entries",{configurable:!0,writable:!0,value:function(e){if("object"!==(void 0===e?"undefined":_typeof(e))||null===e)throw new TypeError("Object.entries object parameter must be an object");return Object.keys(e).map(function(t){return[t,e[t]]})}}),Object.fromEntries||Object.defineProperty(Object,"fromEntries",{configurable:!0,writable:!0,value:function(e){return Array.from(e).reduce(function(e,t){if(Object(t)!==t)throw new TypeError("Object.fromEntries iterable parameter must yield objects");return t[0]in e?Object.defineProperty(e,t[0],{configurable:!0,enumerable:!0,writable:!0,value:t[1]}):e[t[0]]=t[1],e},{})}}),Object.getOwnPropertyDescriptors||Object.defineProperty(Object,"getOwnPropertyDescriptors",{configurable:!0,writable:!0,value:function(e){if(null==e)throw new TypeError("Object.getOwnPropertyDescriptors object parameter is null or undefined");var t=Object(e);return Reflect.ownKeys(t).reduce(function(e,r){var n=Object.getOwnPropertyDescriptor(t,r);return void 0!==n&&(r in e?Object.defineProperty(e,r,{configurable:!0,enumerable:!0,writable:!0,value:n}):e[r]=n),e},{})}}),Object.values||Object.defineProperty(Object,"values",{configurable:!0,writable:!0,value:function(e){if("object"!==(void 0===e?"undefined":_typeof(e))||null===e)throw new TypeError("Object.values object parameter must be an object");return Object.keys(e).map(function(t){return e[t]})}}),String.prototype.padStart||Object.defineProperty(String.prototype,"padStart",{configurable:!0,writable:!0,value:function(t,r){if(null==this)throw new TypeError("String.prototype.padStart called on null or undefined");var n=String(this),a=n.length,i=Number.parseInt(t,10);return i<=a?n:e(i-a,r)+n}}),String.prototype.padEnd||Object.defineProperty(String.prototype,"padEnd",{configurable:!0,writable:!0,value:function(t,r){if(null==this)throw new TypeError("String.prototype.padEnd called on null or undefined");var n=String(this),a=n.length,i=Number.parseInt(t,10);return i<=a?n:n+e(i-a,r)}}),String.prototype.trimStart||Object.defineProperty(String.prototype,"trimStart",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.trimStart called on null or undefined");return t(this,"start")}}),String.prototype.trimLeft||Object.defineProperty(String.prototype,"trimLeft",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.trimLeft called on null or undefined");return t(this,"start")}}),String.prototype.trimEnd||Object.defineProperty(String.prototype,"trimEnd",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.trimEnd called on null or undefined");return t(this,"end")}}),String.prototype.trimRight||Object.defineProperty(String.prototype,"trimRight",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.trimRight called on null or undefined");return t(this,"end")}})}(),function(){function _random(){var e=void 0,t=void 0;switch(arguments.length){case 0:throw new Error("_random called with insufficient parameters");case 1:e=0,t=arguments[0];break;default:e=arguments[0],t=arguments[1]}if(e>t){var r=[t,e];e=r[0],t=r[1]}return Math.floor(_nativeMathRandom()*(t-e+1))+e}function _randomIndex(e,t){var r=void 0,n=void 0;switch(t.length){case 1:r=0,n=e-1;break;case 2:r=0,n=Math.trunc(t[1]);break;default:r=Math.trunc(t[1]),n=Math.trunc(t[2])}return Number.isNaN(r)?r=0:!Number.isFinite(r)||r>=e?r=e-1:r<0&&(r=e+r)<0&&(r=0),Number.isNaN(n)?n=0:!Number.isFinite(n)||n>=e?n=e-1:n<0&&(n=e+n)<0&&(n=e-1),_random(r,n)}function _getCodePointStartAndEnd(e,t){var r=e.charCodeAt(t);if(Number.isNaN(r))return{char:"",start:-1,end:-1};if(r<55296||r>57343)return{char:e.charAt(t),start:t,end:t};if(r>=55296&&r<=56319){var n=t+1;if(n>=e.length)throw new Error("high surrogate without trailing low surrogate");var a=e.charCodeAt(n);if(a<56320||a>57343)throw new Error("high surrogate without trailing low surrogate");return{char:e.charAt(t)+e.charAt(n),start:t,end:n}}if(0===t)throw new Error("low surrogate without leading high surrogate");var i=t-1,o=e.charCodeAt(i);if(o<55296||o>56319)throw new Error("low surrogate without leading high surrogate");return{char:e.charAt(i)+e.charAt(t),start:i,end:t}}var _nativeMathRandom=Math.random;Object.defineProperty(Array,"random",{configurable:!0,writable:!0,value:function(e){if("object"!==(void 0===e?"undefined":_typeof(e))||null===e||!Object.prototype.hasOwnProperty.call(e,"length"))throw new TypeError("Array.random array parameter must be an array or array-lke object");var t=e.length>>>0;if(0!==t){return e[0===arguments.length?_random(0,t-1):_randomIndex(t,Array.prototype.slice.call(arguments,1))]}}}),Object.defineProperty(Array.prototype,"concatUnique",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.concatUnique called on null or undefined");var e=Array.from(this);if(0===arguments.length)return e;var t=Array.prototype.reduce.call(arguments,function(e,t){return e.concat(t)},[]),r=t.length;if(0===r)return e;for(var n=Array.prototype.indexOf,a=Array.prototype.push,i=0;i<r;++i){var o=t[i];-1===n.call(e,o)&&a.call(e,o)}return e}}),Object.defineProperty(Array.prototype,"count",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.count called on null or undefined");for(var e=Array.prototype.indexOf,t=arguments[0],r=Number(arguments[1])||0,n=0;-1!==(r=e.call(this,t,r));)++n,++r;return n}}),Object.defineProperty(Array.prototype,"delete",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.delete called on null or undefined");if(0===arguments.length)return[];var e=this.length>>>0;if(0===e)return[];for(var t=Array.prototype.concat.apply([],arguments),r=t.length,n=[],a=0;a<e;++a)for(var i=this[a],o=0;o<r;++o){var s=t[o];if(i===s||i!==i&&s!==s){n.push(a);break}}for(var u=[],l=0,c=n.length;l<c;++l)u[l]=this[n[l]];for(var d=Array.prototype.splice,f=n.length-1;f>=0;--f)d.call(this,n[f],1);return u}}),Object.defineProperty(Array.prototype,"deleteAt",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.deleteAt called on null or undefined");if(0===arguments.length)return[];var e=this.length>>>0;if(0===e)return[];for(var t=Array.prototype.splice,r=[].concat(_toConsumableArray(new Set(Array.prototype.concat.apply([],arguments).map(function(t){return t<0?Math.max(0,e+t):t})).values())),n=[].concat(_toConsumableArray(r)).sort(function(e,t){return t-e}),a=[],i=0,o=r.length;i<o;++i)a[i]=this[r[i]];for(var s=0,u=n.length;s<u;++s)t.call(this,n[s],1);return a}}),Object.defineProperty(Array.prototype,"deleteWith",{configurable:!0,writable:!0,value:function(e,t){if(null==this)throw new TypeError("Array.prototype.deleteWith called on null or undefined");if("function"!=typeof e)throw new Error("Array.prototype.deleteWith predicate parameter must be a function");var r=this.length>>>0;if(0===r)return[];for(var n=Array.prototype.splice,a=[],i=[],o=0;o<r;++o)e.call(t,this[o],o,this)&&(i.push(this[o]),a.push(o));for(var s=a.length-1;s>=0;--s)n.call(this,a[s],1);return i}}),Object.defineProperty(Array.prototype,"first",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.first called on null or undefined");if(0!=this.length>>>0)return this[0]}}),Object.defineProperty(Array.prototype,"includesAll",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.includesAll called on null or undefined");if(1===arguments.length)return Array.isArray(arguments[0])?Array.prototype.includesAll.apply(this,arguments[0]):Array.prototype.includes.apply(this,arguments);for(var e=0,t=arguments.length;e<t;++e)if(!Array.prototype.some.call(this,function(e){return e===this.val||e!==e&&this.val!==this.val},{val:arguments[e]}))return!1;return!0}}),Object.defineProperty(Array.prototype,"includesAny",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.includesAny called on null or undefined");if(1===arguments.length)return Array.isArray(arguments[0])?Array.prototype.includesAny.apply(this,arguments[0]):Array.prototype.includes.apply(this,arguments);for(var e=0,t=arguments.length;e<t;++e)if(Array.prototype.some.call(this,function(e){return e===this.val||e!==e&&this.val!==this.val},{val:arguments[e]}))return!0;return!1}}),Object.defineProperty(Array.prototype,"last",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.last called on null or undefined");var e=this.length>>>0;if(0!==e)return this[e-1]}}),Object.defineProperty(Array.prototype,"pluck",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.pluck called on null or undefined");var e=this.length>>>0;if(0!==e){var t=0===arguments.length?_random(0,e-1):_randomIndex(e,[].concat(Array.prototype.slice.call(arguments)));return Array.prototype.splice.call(this,t,1)[0]}}}),Object.defineProperty(Array.prototype,"pluckMany",{configurable:!0,writable:!0,value:function(e){if(null==this)throw new TypeError("Array.prototype.pluckMany called on null or undefined");var t=this.length>>>0;if(0===t)return[];var r=Math.trunc(e);if(!Number.isInteger(r))throw new Error("Array.prototype.pluckMany want parameter must be an integer");if(r<1)return[];r>t&&(r=t);var n=Array.prototype.splice,a=[],i=t-1;do{a.push(n.call(this,_random(0,i--),1)[0])}while(a.length<r);return a}}),Object.defineProperty(Array.prototype,"pushUnique",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.pushUnique called on null or undefined");var e=arguments.length;if(0===e)return this.length>>>0;for(var t=Array.prototype.indexOf,r=Array.prototype.push,n=0;n<e;++n){var a=arguments[n];-1===t.call(this,a)&&r.call(this,a)}return this.length>>>0}}),Object.defineProperty(Array.prototype,"random",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.random called on null or undefined");var e=this.length>>>0;if(0!==e){return this[0===arguments.length?_random(0,e-1):_randomIndex(e,[].concat(Array.prototype.slice.call(arguments)))]}}}),Object.defineProperty(Array.prototype,"randomMany",{configurable:!0,writable:!0,value:function(e){if(null==this)throw new TypeError("Array.prototype.randomMany called on null or undefined");var t=this.length>>>0;if(0===t)return[];var r=Math.trunc(e);if(!Number.isInteger(r))throw new Error("Array.prototype.randomMany want parameter must be an integer");if(r<1)return[];r>t&&(r=t);var n=new Map,a=[],i=t-1;do{var o=void 0;do{o=_random(0,i)}while(n.has(o));n.set(o,!0),a.push(this[o])}while(a.length<r);return a}}),Object.defineProperty(Array.prototype,"shuffle",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.shuffle called on null or undefined");var e=this.length>>>0;if(0===e)return this;for(var t=e-1;t>0;--t){var r=Math.floor(_nativeMathRandom()*(t+1));if(t!==r){var n=this[t];this[t]=this[r],this[r]=n}}return this}}),Object.defineProperty(Array.prototype,"unshiftUnique",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.unshiftUnique called on null or undefined");var e=arguments.length;if(0===e)return this.length>>>0;for(var t=Array.prototype.indexOf,r=Array.prototype.unshift,n=0;n<e;++n){var a=arguments[n];-1===t.call(this,a)&&r.call(this,a)}return this.length>>>0}}),Object.defineProperty(Function.prototype,"partial",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Function.prototype.partial called on null or undefined");var e=Array.prototype.slice,t=this,r=e.call(arguments,0);return function(){for(var n=[],a=0,i=0;i<r.length;++i)n.push(r[i]===undefined?arguments[a++]:r[i]);return t.apply(this,n.concat(e.call(arguments,a)))}}}),Object.defineProperty(Math,"clamp",{configurable:!0,writable:!0,value:function(e,t,r){var n=Number(e);return Number.isNaN(n)?NaN:n.clamp(t,r)}}),Object.defineProperty(Math,"easeInOut",{configurable:!0,writable:!0,value:function(e){return 1-(Math.cos(Number(e)*Math.PI)+1)/2}}),Object.defineProperty(Number.prototype,"clamp",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Number.prototype.clamp called on null or undefined");if(2!==arguments.length)throw new Error("Number.prototype.clamp called with an incorrect number of parameters");var e=Number(arguments[0]),t=Number(arguments[1]);if(e>t){var r=[t,e];e=r[0],t=r[1]}return Math.min(Math.max(this,e),t)}}),RegExp.escape||function(){var e=/[\\^$*+?.()|[\]{}]/g,t=new RegExp(e.source);Object.defineProperty(RegExp,"escape",{configurable:!0,writable:!0,value:function(r){var n=String(r);return n&&t.test(n)?n.replace(e,"\\$&"):n}})}(),function(){var e=/{(\d+)(?:,([+-]?\d+))?}/g,t=new RegExp(e.source);Object.defineProperty(String,"format",{configurable:!0,writable:!0,value:function(r){function n(e,t,r){if(!t)return e;var n=Math.abs(t)-e.length;if(n<1)return e;var a=String(r).repeat(n);return t<0?e+a:a+e}if(arguments.length<2)return 0===arguments.length?"":r;var a=2===arguments.length&&Array.isArray(arguments[1])?[].concat(_toConsumableArray(arguments[1])):Array.prototype.slice.call(arguments,1);return 0===a.length?r:t.test(r)?(e.lastIndex=0,r.replace(e,function(e,t,r){var i=a[t];if(null==i)return"";for(;"function"==typeof i;)i=i();switch(void 0===i?"undefined":_typeof(i)){case"string":break;case"object":i=JSON.stringify(i);break;default:i=String(i)}return n(i,r?Number.parseInt(r,10):0," ")})):r}})}(),Object.defineProperty(String.prototype,"contains",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.contains called on null or undefined");return-1!==String.prototype.indexOf.apply(this,arguments)}}),Object.defineProperty(String.prototype,"count",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.count called on null or undefined");var e=String(arguments[0]||"");if(""===e)return 0;for(var t=String.prototype.indexOf,r=e.length,n=Number(arguments[1])||0,a=0;-1!==(n=t.call(this,e,n));)++a,n+=r;return a}}),Object.defineProperty(String.prototype,"first",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.first called on null or undefined");return _getCodePointStartAndEnd(String(this),0).char}}),Object.defineProperty(String.prototype,"last",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.last called on null or undefined");var e=String(this);return _getCodePointStartAndEnd(e,e.length-1).char}}),Object.defineProperty(String.prototype,"splice",{configurable:!0,writable:!0,value:function(e,t,r){if(null==this)throw new TypeError("String.prototype.splice called on null or undefined");var n=this.length>>>0;if(0===n)return"";var a=Number(e);Number.isSafeInteger(a)?a<0&&(a+=n)<0&&(a=0):a=0,a>n&&(a=n);var i=Number(t);(!Number.isSafeInteger(i)||i<0)&&(i=0);var o=this.slice(0,a);return void 0!==r&&(o+=r),a+i<n&&(o+=this.slice(a+i)),o}}),Object.defineProperty(String.prototype,"splitOrEmpty",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.splitOrEmpty called on null or undefined");return""===String(this)?[]:String.prototype.split.apply(this,arguments)}}),Object.defineProperty(String.prototype,"toLocaleUpperFirst",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.toLocaleUpperFirst called on null or undefined");var e=String(this),t=_getCodePointStartAndEnd(e,0),r=t.char,n=t.end;return-1===n?"":r.toLocaleUpperCase()+e.slice(n+1)}}),Object.defineProperty(String.prototype,"toUpperFirst",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.toUpperFirst called on null or undefined");var e=String(this),t=_getCodePointStartAndEnd(e,0),r=t.char,n=t.end;return-1===n?"":r.toUpperCase()+e.slice(n+1)}}),Object.defineProperty(Date.prototype,"toJSON",{configurable:!0,writable:!0,value:function(){return["(revive:date)",this.toISOString()]}}),Object.defineProperty(Function.prototype,"toJSON",{configurable:!0,writable:!0,value:function(){return["(revive:eval)","("+this.toString()+")"]}}),Object.defineProperty(Map.prototype,"toJSON",{configurable:!0,writable:!0,value:function(){return["(revive:map)",[].concat(_toConsumableArray(this))]}}),Object.defineProperty(RegExp.prototype,"toJSON",{configurable:!0,writable:!0,value:function(){return["(revive:eval)",this.toString()]}}),Object.defineProperty(Set.prototype,"toJSON",{configurable:!0,writable:!0,value:function(){return["(revive:set)",[].concat(_toConsumableArray(this))]}}),Object.defineProperty(JSON,"reviveWrapper",{configurable:!0,writable:!0,value:function(e,t){if("string"!=typeof e)throw new TypeError("JSON.reviveWrapper code parameter must be a string");return["(revive:eval)",[e,t]]}}),Object.defineProperty(JSON,"_real_stringify",{value:JSON.stringify}),Object.defineProperty(JSON,"stringify",{configurable:!0,writable:!0,value:function(e,t,r){return JSON._real_stringify(e,function(e,r){var n=r;if("function"==typeof t)try{n=t(e,n)}catch(e){}return void 0===n&&(n=["(revive:eval)","undefined"]),n},r)}}),Object.defineProperty(JSON,"_real_parse",{value:JSON.parse}),Object.defineProperty(JSON,"parse",{configurable:!0,writable:!0,value:function value(text,reviver){return JSON._real_parse(text,function(key,val){var value=val;if(Array.isArray(value)&&2===value.length)switch(value[0]){case"(revive:set)":value=new Set(value[1]);break;case"(revive:map)":value=new Map(value[1]);break;case"(revive:date)":value=new Date(value[1]);break;case"(revive:eval)":try{if(Array.isArray(value[1])){var $ReviveData$=value[1][1];value=eval(value[1][0])}else value=eval(value[1])}catch(e){}}else if("string"==typeof value&&"@@revive@@"===value.slice(0,10))try{value=eval(value.slice(10))}catch(e){}if("function"==typeof reviver)try{value=reviver(key,value)}catch(e){}return value})}}),Object.defineProperty(Array.prototype,"contains",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.contains called on null or undefined");return Array.prototype.includes.apply(this,arguments)}}),Object.defineProperty(Array.prototype,"containsAll",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.containsAll called on null or undefined");return Array.prototype.includesAll.apply(this,arguments)}}),Object.defineProperty(Array.prototype,"containsAny",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.containsAny called on null or undefined");return Array.prototype.includesAny.apply(this,arguments)}}),Object.defineProperty(Array.prototype,"flatten",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("Array.prototype.flatten called on null or undefined");return Array.prototype.flat.call(this,1/0)}}),Object.defineProperty(String.prototype,"readBracketedList",{configurable:!0,writable:!0,value:function(){if(null==this)throw new TypeError("String.prototype.readBracketedList called on null or undefined");for(var e=new RegExp("(?:\\[\\[((?:\\s|\\S)*?)\\]\\])|([^\"'\\s]\\S*)","gm"),t=[],r=void 0;null!==(r=e.exec(this));)r[1]?t.push(r[1]):r[2]&&t.push(r[2]);return t}})}();var Browser=function(){var e=navigator.userAgent.toLowerCase(),t=e.includes("windows phone"),r=Object.freeze({Android:!t&&e.includes("android"),BlackBerry:/blackberry|bb10/.test(e),iOS:!t&&/ip(?:hone|ad|od)/.test(e),Opera:!t&&("object"===_typeof(window.operamini)||e.includes("opera mini")),Windows:t||/iemobile|wpdesktop/.test(e),any:function(){return r.Android||r.BlackBerry||r.iOS||r.Opera||r.Windows}}),n=!r.Windows&&!/khtml|trident|edge/.test(e)&&e.includes("gecko"),a=!e.includes("opera")&&/msie|trident/.test(e),i=a?function(){var t=/(?:msie\s+|rv:)(\d+\.\d)/.exec(e);return t?Number(t[1]):0}():null,o=e.includes("opera")||e.includes(" opr/"),s=o?function(){var t=new RegExp((/khtml|chrome/.test(e)?"opr":"version")+"\\/(\\d+\\.\\d+)"),r=t.exec(e);return r?Number(r[1]):0}():null,u=e.includes("vivaldi");return Object.freeze({userAgent:e,isMobile:r,isGecko:n,isIE:a,ieVersion:i,isOpera:o,operaVersion:s,isVivaldi:u})}(),Has=function(){var e=function(){try{return"function"==typeof document.createElement("audio").canPlayType}catch(e){}return!1}(),t=function(){try{return"Blob"in window&&"File"in window&&"FileList"in window&&"FileReader"in window&&(!Browser.isOpera||Browser.operaVersion>=15)}catch(e){}return!1}(),r=function(){try{return"geolocation"in navigator&&"function"==typeof navigator.geolocation.getCurrentPosition&&"function"==typeof navigator.geolocation.watchPosition}catch(e){}return!1}(),n=function(){try{return"MutationObserver"in window&&"function"==typeof window.MutationObserver}catch(e){}return!1}(),a=function(){try{return"performance"in window&&"function"==typeof window.performance.now}catch(e){}return!1}(),i=function(){try{return"ontouchstart"in window||!!window.DocumentTouch&&document instanceof window.DocumentTouch||!!navigator.maxTouchPoints||!!navigator.msMaxTouchPoints}catch(e){}return!1}(),o=function(){try{for(var e=new Map([["transition","transitionend"],["MSTransition","msTransitionEnd"],["WebkitTransition","webkitTransitionEnd"],["MozTransition","transitionend"]]),t=[].concat(_toConsumableArray(e.keys())),r=document.createElement("div"),n=0;n<t.length;++n)if(r.style[t[n]]!==undefined)return e.get(t[n])}catch(e){}return!1}();return Object.freeze({audio:e,fileAPI:t,geolocation:r,mutationObserver:n,performance:a,touch:i,transitionEndEvent:o})}(),Visibility=function(){function e(){return a}function t(){return a&&document[a.stateProperty]||"visible"}function r(){return Boolean(a)}function n(){return Boolean(a&&document[a.hiddenProperty])}var a=function(){try{return Object.freeze([{hiddenProperty:"hidden",stateProperty:"visibilityState",changeEvent:"visibilitychange"},{hiddenProperty:"webkitHidden",stateProperty:"webkitVisibilityState",changeEvent:"webkitvisibilitychange"},{hiddenProperty:"mozHidden",stateProperty:"mozVisibilityState",changeEvent:"mozvisibilitychange"},{hiddenProperty:"msHidden",stateProperty:"msVisibilityState",changeEvent:"msvisibilitychange"}].find(function(e){return e.hiddenProperty in document}))}catch(e){}return undefined}();return Object.freeze(Object.defineProperties({},{vendor:{get:e},state:{get:t},isEnabled:{value:r},isHidden:{value:n},hiddenProperty:{value:a&&a.hiddenProperty},stateProperty:{value:a&&a.stateProperty},changeEvent:{value:a&&a.changeEvent}}))}(),Fullscreen=function(){function e(e){var t=e||document.documentElement;return t===document.documentElement&&("msRequestFullscreen"===f.requestFn||Browser.isOpera&&Browser.operaVersion<15)&&(t=document.body),t}function t(){return f}function r(){return(f||null)&&document[f.element]}function n(){return Boolean(f&&document[f.isEnabled])}function a(){return Boolean(f&&document[f.element])}function i(t,r){var n=this;if(!f)return Promise.reject(new Error("fullscreen not supported"));var i=e(r);if("function"!=typeof i[f.requestFn])return Promise.reject(new Error("fullscreen not supported"));if(a())return Promise.resolve();if(p())return i[f.requestFn](t);var o=".Fullscreen_requestFullscreen";return new Promise(function(e,r){jQuery(i).off(o).one(""+f.errorEvent+o+" "+f.changeEvent+o,function(t){jQuery(n).off(o),t.type===f.errorEvent?r(new Error("unknown fullscreen request error")):e()}),i[f.requestFn](t)})}function o(){var e=this;if(!f||"function"!=typeof document[f.exitFn])return Promise.reject(new TypeError("fullscreen not supported"));if(!a())return Promise.reject(new TypeError("fullscreen mode not active"));if(p())return document[f.exitFn]();var t=".Fullscreen_exitFullscreen";return new Promise(function(r,n){jQuery(document).off(t).one(""+f.errorEvent+t+" "+f.changeEvent+t,function(a){jQuery(e).off(t),a.type===f.errorEvent?n(new Error("unknown fullscreen exit error")):r()}),document[f.exitFn]()})}function s(e,t){return a()?o():i(e,t)}function u(t,r){if(f){var n=e(r);$(n).on(f.changeEvent,t)}}function l(t,r){if(f){var n=e(r);t?$(n).off(f.changeEvent,t):$(n).off(f.changeEvent)}}function c(t,r){if(f){var n=e(r);$(n).on(f.errorEvent,t)}}function d(t,r){if(f){var n=e(r);t?$(n).off(f.errorEvent,t):$(n).off(f.errorEvent)}}var f=function(){try{return Object.freeze([{isEnabled:"fullscreenEnabled",element:"fullscreenElement",requestFn:"requestFullscreen",exitFn:"exitFullscreen",changeEvent:"fullscreenchange",errorEvent:"fullscreenerror"},{isEnabled:"webkitFullscreenEnabled",element:"webkitFullscreenElement",requestFn:"webkitRequestFullscreen",exitFn:"webkitExitFullscreen",changeEvent:"webkitfullscreenchange",errorEvent:"webkitfullscreenerror"},{isEnabled:"mozFullScreenEnabled",element:"mozFullScreenElement",requestFn:"mozRequestFullScreen",exitFn:"mozCancelFullScreen",changeEvent:"mozfullscreenchange",errorEvent:"mozfullscreenerror"},{isEnabled:"msFullscreenEnabled",element:"msFullscreenElement",requestFn:"msRequestFullscreen",exitFn:"msExitFullscreen",changeEvent:"MSFullscreenChange",errorEvent:"MSFullscreenError"}].find(function(e){return e.isEnabled in document}))}catch(e){}return undefined}(),p=function(){function e(){if(null!==t)return t;if(t=!1,f)try{var e=document.exitFullscreen();e.catch(function(){}),t=e instanceof Promise}catch(e){}return t}var t=null;return e}();return Object.freeze(Object.defineProperties({},{vendor:{get:t},element:{get:r},isEnabled:{value:n},isFullscreen:{value:a},request:{value:i},exit:{value:o},toggle:{value:s},onChange:{value:u},offChange:{value:l},onError:{value:c},offError:{value:d}}))}(),_ref3=function(){function e(e){for(var t=e.cloneNode(!0),r=document.createDocumentFragment(),n=void 0;null!==(n=t.firstChild);){if(n.nodeType===Node.ELEMENT_NODE)switch(n.nodeName.toUpperCase()){case"BR":case"DIV":case"P":r.appendChild(document.createTextNode(" "))}r.appendChild(n)}return r.textContent}function t(e){if("object"!==(void 0===e?"undefined":_typeof(e))||null===e)return e;if(e instanceof String)return String(e);if(e instanceof Number)return Number(e);if(e instanceof Boolean)return Boolean(e)
