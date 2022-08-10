@@ -6,3 +6,10 @@
 In short, this work is a nonprofit piece for entertainment and little else. Credits can be found on the respective credits page.
 
 As of the latest update, this work is still in progress.
+
+## Progress
+Planning: 100%
+Writing: 70%
+Music: 60%
+Sprites: 30%
+CGs: 0%
