@@ -199,7 +199,7 @@ FONT STUFF ENDS
 **/
 
 /**
-The big cool HTML things. Really just for the background.
+Overall styling.
 **/
 html {
   background-color: #FFFFFF;
@@ -231,12 +231,21 @@ input[type=range] {
 	vertical-align: middle;
 }
 
-ul {
+ul, input, button {
   border-radius: 5px;
 }
 
-input {
-  border-radius: 5px;
+input::-webkit-slider-thumb {
+  width: 25px; /* Set a specific slider handle width */
+  height: 25px; /* Slider handle height */
+  background: #04AA6D;
+}
+
+input::-moz-range-thumb {
+  width: 25px; /* Set a specific slider handle width */
+  height: 25px; /* Slider handle height */
+  background: #04AA6D; /* Green background */
+  cursor: pointer; /* Cursor on hover */
 }
 
 /**
@@ -1570,9 +1579,9 @@ This work is a nonprofit piece for entertainment and little else. Credits can be
 
 [[Begin.|The Beginning?]]</tw-passagedata><tw-passagedata pid="126" name="The Beginning?" tags="prologue" position="945,107" size="100,100">&lt;&lt;set $playerName to &quot;&quot;&gt;&gt;Enter your name.
 
-&lt;&lt;textbox &quot;$playerName&quot; &quot;&quot; autofocus&gt;&gt;&lt;&lt;button &quot;Submit&quot;&gt;&gt;
+&lt;&lt;textbox &quot;$playerName&quot; &quot;&quot; autofocus&gt;&gt;    &lt;&lt;button &quot;Submit&quot;&gt;&gt;
 	&lt;&lt;if $playerName === &quot;&quot;&gt;&gt;
-		&lt;&lt;replace &quot;#output&quot;&gt;&gt;&lt;&lt;= either([&quot;Nope.&quot;, &quot;Try again.&quot;, &quot;Wrong.&quot;])&gt;&gt;&lt;&lt;/replace&gt;&gt;
+		&lt;&lt;replace &quot;#output&quot;&gt;&gt;&lt;&lt;= [&quot;Please input a name.&quot;]&gt;&gt;&lt;&lt;/replace&gt;&gt;
 	&lt;&lt;else&gt;&gt;
 		&lt;&lt;goto &quot;Prologue Page&quot;&gt;&gt;
 	&lt;&lt;/if&gt;&gt;
